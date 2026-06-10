@@ -34,7 +34,7 @@ func (r *RequestHandler) ListAliases() Response {
 		msg := fmt.Sprintf("1 validation error detected: Value '%d' at 'limit' failed to satisfy "+
 			"constraint: Minimum value of 1. Maximum value of 100.", limit)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "limit", limit)
 		return NewValidationExceptionResponse(msg)
 	}
 
@@ -54,7 +54,7 @@ func (r *RequestHandler) ListAliases() Response {
 		if key == nil {
 			msg := fmt.Sprintf("Key '%s' does not exist", target)
 
-			r.logger.Warnf(msg)
+			r.logger.WarnContext(r.request.Context(), "key not found", "keyArn", target)
 			return NewNotFoundExceptionResponse(msg)
 		}
 
@@ -70,11 +70,11 @@ func (r *RequestHandler) ListAliases() Response {
 	if err != nil {
 
 		if _, ok := err.(*data.InvalidMarkerExceptionError); ok {
-			r.logger.Warnf("Invalid marker passed")
+			r.logger.WarnContext(r.request.Context(), "Invalid marker")
 			return New400ExceptionResponse("InvalidMarkerException", "")
 		}
 
-		r.logger.Error(err)
+		r.logger.ErrorContext(r.request.Context(), "internal error", "error", err)
 		return NewInternalFailureExceptionResponse(err.Error())
 	}
 
@@ -117,7 +117,7 @@ func (r *RequestHandler) ListAliases() Response {
 
 	//---
 
-	r.logger.Infof("%d aliases listed\n", len(aliases))
+	r.logger.DebugContext(r.request.Context(), "Aliases listed", "count", len(aliases), "truncated", response.Truncated)
 
 	return NewResponse(200, response)
 }

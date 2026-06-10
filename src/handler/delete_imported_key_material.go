@@ -10,7 +10,7 @@ import (
 func (r *RequestHandler) DeleteImportedKeyMaterial() Response {
 	var body *kms.DeleteImportedKeyMaterialInput
 	if err := r.decodeBodyInto(&body); err != nil {
-		r.logger.Errorf("Error decoding ImportKeyMaterialInput. Err %s\n", err.Error())
+		r.logger.ErrorContext(r.request.Context(), "Failed to decode request", "error", err)
 		body = &kms.DeleteImportedKeyMaterialInput{}
 	}
 
@@ -20,7 +20,7 @@ func (r *RequestHandler) DeleteImportedKeyMaterial() Response {
 	if body.KeyId == nil {
 		msg := "KeyId is a required parameter"
 
-		r.logger.Warn(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "field", "KeyId", "error", "required parameter")
 		return NewMissingParameterResponse(msg)
 	}
 
@@ -36,7 +36,7 @@ func (r *RequestHandler) DeleteImportedKeyMaterial() Response {
 	if key == nil {
 		msg := fmt.Sprintf("Key '%s' does not exist", key.GetArn())
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "key not found", "keyArn", key.GetArn())
 		return NewNotFoundExceptionResponse(msg)
 	}
 
@@ -48,7 +48,7 @@ func (r *RequestHandler) DeleteImportedKeyMaterial() Response {
 	if keyMetadata.Origin != cmk.KeyOriginExternal {
 		msg := fmt.Sprintf("%s origin is %s which is not valid for this operation.", key.GetArn(), keyMetadata.Origin)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "unsupported operation", "keyArn", key.GetArn(), "origin", keyMetadata.Origin)
 		return NewUnsupportedOperationException(msg)
 	}
 
@@ -56,13 +56,13 @@ func (r *RequestHandler) DeleteImportedKeyMaterial() Response {
 	case cmk.KeyStatePendingDeletion:
 		msg := fmt.Sprintf("%s is pending deletion.", *body.KeyId)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "key pending deletion", "keyId", *body.KeyId)
 		return NewKMSInvalidStateExceptionResponse(msg)
 
 	case cmk.KeyStateUnavailable:
 		msg := fmt.Sprintf("%s is unavailable.", *body.KeyId)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "invalid key state", "keyId", *body.KeyId)
 		return NewKMSInvalidStateExceptionResponse(msg)
 	}
 
@@ -80,11 +80,11 @@ func (r *RequestHandler) DeleteImportedKeyMaterial() Response {
 	// Save the key
 
 	if err := r.database.SaveKey(key); err != nil {
-		r.logger.Error(err)
+		r.logger.ErrorContext(r.request.Context(), "internal error", "error", err)
 		return NewInternalFailureExceptionResponse(err.Error())
 	}
 
-	r.logger.Infof("Deleted key material for key %s", key.GetArn())
+	r.logger.InfoContext(r.request.Context(), "Key material deleted", "keyArn", key.GetArn())
 
 	return NewResponse(200, &struct {
 		KeyId string

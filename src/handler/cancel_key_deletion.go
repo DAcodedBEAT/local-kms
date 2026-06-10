@@ -23,7 +23,7 @@ func (r *RequestHandler) CancelKeyDeletion() Response {
 	if body.KeyId == nil {
 		msg := "KeyId is a required parameter"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "field", "KeyId", "error", "required parameter")
 		return NewMissingParameterResponse(msg)
 	}
 
@@ -37,7 +37,7 @@ func (r *RequestHandler) CancelKeyDeletion() Response {
 	if key == nil {
 		msg := fmt.Sprintf("Key '%s' does not exist", target)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "key not found", "keyArn", target)
 		return NewNotFoundExceptionResponse(msg)
 	}
 
@@ -46,7 +46,7 @@ func (r *RequestHandler) CancelKeyDeletion() Response {
 	if key.GetMetadata().KeyState != cmk.KeyStatePendingDeletion {
 		msg := fmt.Sprintf("%s is not pending deletion.", target)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "invalid key state", "keyArn", target)
 		return NewKMSInvalidStateExceptionResponse(msg)
 	}
 
@@ -61,13 +61,13 @@ func (r *RequestHandler) CancelKeyDeletion() Response {
 
 	err = r.database.SaveKey(key)
 	if err != nil {
-		r.logger.Error(err)
+		r.logger.ErrorContext(r.request.Context(), "internal error", "error", err)
 		return NewInternalFailureExceptionResponse(err.Error())
 	}
 
 	//---
 
-	r.logger.Infof("Key deletion canceled: %s\n", key.GetArn())
+	r.logger.InfoContext(r.request.Context(), "Key deletion canceled", "keyArn", key.GetArn())
 
 	return NewResponse(200, map[string]any{
 		"KeyId": key.GetArn(),

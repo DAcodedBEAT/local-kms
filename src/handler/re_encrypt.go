@@ -22,14 +22,14 @@ func (r *RequestHandler) ReEncrypt() Response {
 	if body.DestinationKeyId == nil {
 		msg := "DestinationKeyId is a required parameter"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "parameter", "DestinationKeyId")
 		return NewMissingParameterResponse(msg)
 	}
 
 	if len(body.CiphertextBlob) == 0 {
 		msg := "CiphertextBlob is a required parameter"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "parameter", "CiphertextBlob")
 		return NewMissingParameterResponse(msg)
 	}
 
@@ -37,7 +37,7 @@ func (r *RequestHandler) ReEncrypt() Response {
 		msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'CiphertextBlob' failed to satisfy "+
 			"constraint: Member must have length minimum length of 1 and maximum length of 6144.", string(body.CiphertextBlob))
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "ciphertextBlobLength", len(body.CiphertextBlob))
 		return NewValidationExceptionResponse(msg)
 	}
 
@@ -68,7 +68,7 @@ func (r *RequestHandler) ReEncrypt() Response {
 
 	if keySource.GetMetadata().KeyUsage != cmk.UsageEncryptDecrypt {
 		msg := fmt.Sprintf("%s key usage is %s which is not valid for Decrypt (via ReEncrypt).", keySource.GetArn(), keySource.GetMetadata().KeyUsage)
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "invalid key usage", "keyArn", keySource.GetArn(), "keyUsage", keySource.GetMetadata().KeyUsage)
 		return NewInvalidKeyUsageException(msg)
 	}
 
@@ -81,8 +81,7 @@ func (r *RequestHandler) ReEncrypt() Response {
 
 		plaintext, err = k.Decrypt(keySourceVersion, ciphertext, body.SourceEncryptionContext)
 		if err != nil {
-			msg := fmt.Sprintf("Unable to decode Ciphertext: %s", err)
-			r.logger.Warnf(msg)
+			r.logger.WarnContext(r.request.Context(), "unable to decode ciphertext", "error", err)
 
 			return NewInvalidCiphertextExceptionResponse("")
 		}
@@ -91,8 +90,7 @@ func (r *RequestHandler) ReEncrypt() Response {
 
 		plaintext, err = k.Decrypt(body.CiphertextBlob, cmk.EncryptionAlgorithm(body.SourceEncryptionAlgorithm))
 		if err != nil {
-			msg := fmt.Sprintf("Unable to decode Ciphertext: %s", err)
-			r.logger.Warnf(msg)
+			r.logger.WarnContext(r.request.Context(), "unable to decode ciphertext", "error", err)
 
 			return NewInvalidCiphertextExceptionResponse("")
 		}
@@ -113,7 +111,7 @@ func (r *RequestHandler) ReEncrypt() Response {
 
 	if keyDestination.GetMetadata().KeyUsage != cmk.UsageEncryptDecrypt {
 		msg := fmt.Sprintf("%s key usage is %s which is not valid for ReEncrypt.", keyDestination.GetArn(), keyDestination.GetMetadata().KeyUsage)
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "invalid key usage", "keyArn", keyDestination.GetArn(), "keyUsage", keyDestination.GetMetadata().KeyUsage)
 		return NewInvalidKeyUsageException(msg)
 	}
 
@@ -126,7 +124,7 @@ func (r *RequestHandler) ReEncrypt() Response {
 
 		cipherResponse, err = k.EncryptAndPackage(plaintext, body.DestinationEncryptionContext)
 		if err != nil {
-			r.logger.Error(err.Error())
+			r.logger.ErrorContext(r.request.Context(), "internal error", "error", err)
 			return NewInternalFailureExceptionResponse(err.Error())
 		}
 
@@ -134,7 +132,7 @@ func (r *RequestHandler) ReEncrypt() Response {
 
 		cipherResponse, err = k.Encrypt(plaintext, cmk.EncryptionAlgorithm(body.DestinationEncryptionAlgorithm))
 		if err != nil {
-			r.logger.Error(err.Error())
+			r.logger.ErrorContext(r.request.Context(), "internal error", "error", err)
 			return NewInternalFailureExceptionResponse(err.Error())
 		}
 
@@ -144,7 +142,7 @@ func (r *RequestHandler) ReEncrypt() Response {
 
 	//---
 
-	r.logger.Infof("ReEncrypt called: %s -> %s\n", keySource.GetArn(), keyDestination.GetArn())
+	r.logger.InfoContext(r.request.Context(), "ReEncrypt", "sourceKeyArn", keySource.GetArn(), "destKeyArn", keyDestination.GetArn())
 
 	return NewResponse(200, &struct {
 		KeyId                          string

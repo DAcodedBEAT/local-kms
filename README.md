@@ -258,11 +258,12 @@ Signing key choice: ECC 256-bit = smallest signatures; RSA 2048-bit = cheaper pe
 ## Configuration
 Environment variables for LKMS config:
 
-- **PORT**: Listen port. Default: 8080
+- **KMS_PORT**: Listen port. Default: 8080
 - **KMS_ACCOUNT_ID**: Dummy AWS account ID. Default: 111122223333
 - **KMS_REGION**: Dummy region. Default: eu-west-2
 - **KMS_SEED_PATH**: Seeding file path. Default: `/init/seed.yaml`
 - **KMS_DATA_PATH**: Database path.
+- **KMS_LOG_LEVEL**: Log level (e.g., DEBUG, INFO, WARN, ERROR). Default: INFO
 	- Docker default: `/data`
 	- Native default: `/tmp/local-kms`
 

@@ -22,7 +22,7 @@ func (r *RequestHandler) DisableKey() Response {
 	if body.KeyId == nil {
 		msg := "KeyId is a required parameter"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "field", "KeyId", "error", "required parameter")
 		return NewMissingParameterResponse(msg)
 	}
 
@@ -38,12 +38,12 @@ func (r *RequestHandler) DisableKey() Response {
 	switch key.GetMetadata().KeyState {
 	case cmk.KeyStatePendingDeletion:
 		msg := fmt.Sprintf("%s is pending deletion.", key.GetArn())
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "key pending deletion", "keyArn", key.GetArn())
 		return NewKMSInvalidStateExceptionResponse(msg)
 
 	case cmk.KeyStatePendingImport:
 		msg := fmt.Sprintf("%s is pending import.", key.GetArn())
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "key pending import", "keyArn", key.GetArn())
 		return NewKMSInvalidStateExceptionResponse(msg)
 	}
 
@@ -57,13 +57,13 @@ func (r *RequestHandler) DisableKey() Response {
 
 	err = r.database.SaveKey(key)
 	if err != nil {
-		r.logger.Error(err)
+		r.logger.ErrorContext(r.request.Context(), "internal error", "error", err)
 		return NewInternalFailureExceptionResponse(err.Error())
 	}
 
 	//---
 
-	r.logger.Infof("Key disabled: %s\n", key.GetArn())
+	r.logger.InfoContext(r.request.Context(), "Key disabled", "keyArn", key.GetArn())
 
 	return NewResponse(200, nil)
 

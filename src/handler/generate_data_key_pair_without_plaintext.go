@@ -12,7 +12,7 @@ func (r *RequestHandler) GenerateDataKeyPairWithoutPlaintext() Response {
 
 	//---
 
-	r.logger.Infof("Data key pair generated without plaintext: %s\n", keyResponse.KeyId)
+	r.logger.InfoContext(r.request.Context(), "Data key pair generated without plaintext", "keyArn", keyResponse.KeyId)
 
 	return NewResponse(200, keyResponse)
 }

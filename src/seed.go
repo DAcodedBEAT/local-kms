@@ -1,7 +1,7 @@
 package src
 
 import (
-	"fmt"
+	"context"
 	"github.com/nsmithuk/local-kms/src/cmk"
 	"github.com/nsmithuk/local-kms/src/config"
 	"github.com/nsmithuk/local-kms/src/data"
@@ -11,23 +11,23 @@ import (
 	"path/filepath"
 )
 
-func seed(path string, database *data.Database) {
+func seed(ctx context.Context, path string, database *data.Database) {
 
 	if path == "" {
-		logger.Infoln("No seed path passed; skipping.")
+		logger.InfoContext(ctx, "No seed path, skipping seeding")
 		return
 	}
 
 	path, _ = filepath.Abs(path)
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		logger.Infoln(fmt.Sprintf("No file found at path %s; skipping seeding.", path))
+		logger.InfoContext(ctx, "No seed file found, skipping", "path", path)
 		return
 	}
 
-	context, err := os.ReadFile(path)
+	fileContent, err := os.ReadFile(path)
 	if err != nil {
-		logger.Errorln(fmt.Sprintf("Unable to read seed content of file at path %s; skipping.", path))
+		logger.ErrorContext(ctx, "Unable to read seed file", "path", path, "error", err)
 		return
 	}
 
@@ -58,10 +58,10 @@ func seed(path string, database *data.Database) {
 	var aesKeys []cmk.AesKey
 	var aliases []data.Alias
 
-	err = yaml.Unmarshal([]byte(context), &seed)
+	err = yaml.Unmarshal(fileContent, &seed)
 	if err != nil {
 
-		logger.Warningln(fmt.Sprintf("Error parsing YAML at path %s: %s; attempting to parse legacy format.", path, err))
+		logger.WarnContext(ctx, "YAML parse error, attempting legacy format", "path", path, "error", err)
 
 		//------------------------------------------------------
 		// Try processing the document in the legacy format
@@ -74,15 +74,14 @@ func seed(path string, database *data.Database) {
 		}
 
 		seed := InputOld{}
-		err = yaml.Unmarshal([]byte(context), &seed)
+		err = yaml.Unmarshal(fileContent, &seed)
 		if err != nil {
-			logger.Errorln(fmt.Sprintf("Error parsing YAML at path %s: %s; skipping.", path, err))
+			logger.ErrorContext(ctx, "YAML parse error", "path", path, "error", err)
 			return
 		}
 
 		if len(seed.Keys) > 0 {
-			logger.Warnf("The seed file is using a legacy format. Please update to the latest version. " +
-				"Support for the legacy version will be removed in future versions.\n")
+			logger.WarnContext(ctx, "Legacy seed format detected, will be removed in a future version")
 		}
 
 		aesKeys = append(aesKeys, seed.Keys...)
@@ -98,7 +97,7 @@ func seed(path string, database *data.Database) {
 		aliases = append(aliases, seed.Aliases...)
 	}
 
-	logger.Infof("Importing data from seed file %s\n", path)
+	logger.InfoContext(ctx, "Importing seed data", "path", path)
 
 	for i, alias := range aliases {
 		aliases[i].AliasArn = config.ArnPrefix() + alias.AliasName
@@ -109,27 +108,27 @@ func seed(path string, database *data.Database) {
 
 	keysAdded := 0
 	for _, key := range aesKeys {
-		if keyIsNew(database, &key.Metadata) {
+		if keyIsNew(ctx, database, &key.Metadata) {
 			if err := database.SaveKey(&key); err != nil {
-				logger.Warnf("Failed to save key %s: %v", key.GetMetadata().KeyId, err)
+				logger.WarnContext(ctx, "Failed to save key", "keyId", key.GetMetadata().KeyId, "error", err)
 				continue
 			}
 			keysAdded++
 		}
 	}
 	for _, key := range rsaKeys {
-		if keyIsNew(database, &key.Metadata) {
+		if keyIsNew(ctx, database, &key.Metadata) {
 			if err := database.SaveKey(&key); err != nil {
-				logger.Warnf("Failed to save key %s: %v", key.GetMetadata().KeyId, err)
+				logger.WarnContext(ctx, "Failed to save key", "keyId", key.GetMetadata().KeyId, "error", err)
 				continue
 			}
 			keysAdded++
 		}
 	}
 	for _, key := range eccKeys {
-		if keyIsNew(database, &key.Metadata) {
+		if keyIsNew(ctx, database, &key.Metadata) {
 			if err := database.SaveKey(&key); err != nil {
-				logger.Warnf("Failed to save key %s: %v", key.GetMetadata().KeyId, err)
+				logger.WarnContext(ctx, "Failed to save key", "keyId", key.GetMetadata().KeyId, "error", err)
 				continue
 			}
 			keysAdded++
@@ -140,23 +139,23 @@ func seed(path string, database *data.Database) {
 	for _, alias := range aliases {
 
 		if _, err := database.LoadAlias(alias.AliasArn); err != leveldb.ErrNotFound {
-			logger.Warnf("Alias %s already exists; skipping alias\n", alias.AliasName)
+			logger.WarnContext(ctx, "Alias already exists, skipping", "aliasName", alias.AliasName)
 			continue
 		}
 
 		if err := database.SaveAlias(&alias); err != nil {
-			logger.Warnf("Failed to save alias %s: %v", alias.AliasName, err)
+			logger.WarnContext(ctx, "Failed to save alias", "aliasName", alias.AliasName, "error", err)
 			continue
 		}
 		aliasesAdded++
 	}
 
-	logger.Infof("%d new keys and %d new aliases added\n", keysAdded, aliasesAdded)
+	logger.InfoContext(ctx, "Seed complete", "keysAdded", keysAdded, "aliasesAdded", aliasesAdded)
 }
 
-func keyIsNew(database *data.Database, metadata *cmk.KeyMetadata) bool {
+func keyIsNew(ctx context.Context, database *data.Database, metadata *cmk.KeyMetadata) bool {
 	if _, err := database.LoadKey(metadata.Arn); err != leveldb.ErrNotFound {
-		logger.Warnf("Key %s already exists; skipping key", metadata.KeyId)
+		logger.WarnContext(ctx, "Key already exists, skipping", "keyId", metadata.KeyId)
 		return false
 	}
 	return true

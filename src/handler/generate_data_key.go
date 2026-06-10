@@ -25,7 +25,7 @@ func (r *RequestHandler) GenerateDataKey() Response {
 
 	//---
 
-	r.logger.Infof("Data key generated with plaintext: %s\n", keyResponse.KeyId)
+	r.logger.InfoContext(r.request.Context(), "Data key generated with plaintext", "keyArn", keyResponse.KeyId)
 
 	return NewResponse(200, keyResponse)
 }
@@ -50,21 +50,21 @@ func (r *RequestHandler) generateDataKey() (Response, *GenerateDataKeyResponse) 
 	if body.KeyId == nil {
 		msg := "KeyId is a required parameter"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "parameter", "KeyId")
 		return NewMissingParameterResponse(msg), nil
 	}
 
 	if body.NumberOfBytes == nil && body.KeySpec == "" {
 		msg := "1 validation error detected: Either KeySpec or NumberOfBytes is required."
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "reason", "missing required parameter")
 		return NewValidationExceptionResponse(msg), nil
 	}
 
 	if body.NumberOfBytes != nil && body.KeySpec != "" {
 		msg := "1 validation error detected: Both KeySpec and NumberOfBytes cannot be provided."
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "reason", "multiple parameters provided")
 		return NewValidationExceptionResponse(msg), nil
 	}
 
@@ -72,7 +72,7 @@ func (r *RequestHandler) generateDataKey() (Response, *GenerateDataKeyResponse) 
 		msg := fmt.Sprintf("1 validation error detected: Value '%d' at 'NumberOfBytes' failed to satisfy "+
 			"constraint: Member must have minimum value of 1 and maximum value of 1024.", *body.NumberOfBytes)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "bytes", *body.NumberOfBytes)
 		return NewValidationExceptionResponse(msg), nil
 	}
 
@@ -88,7 +88,7 @@ func (r *RequestHandler) generateDataKey() (Response, *GenerateDataKeyResponse) 
 			msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'KeySpec' failed to satisfy "+
 				"constraint: Member must be AES_128 or AES_256", body.KeySpec)
 
-			r.logger.Warnf(msg)
+			r.logger.WarnContext(r.request.Context(), "invalid key spec", "keySpec", body.KeySpec)
 			return NewValidationExceptionResponse(msg), nil
 		}
 
@@ -116,7 +116,7 @@ func (r *RequestHandler) generateDataKey() (Response, *GenerateDataKeyResponse) 
 
 		cipherResponse, err = k.EncryptAndPackage(plaintext, body.EncryptionContext)
 		if err != nil {
-			r.logger.Error(err.Error())
+			r.logger.ErrorContext(r.request.Context(), "internal error", "error", err)
 			return NewInternalFailureExceptionResponse(err.Error()), nil
 		}
 
@@ -125,12 +125,12 @@ func (r *RequestHandler) generateDataKey() (Response, *GenerateDataKeyResponse) 
 		if k.GetMetadata().KeyUsage == cmk.UsageSignVerify {
 			msg := fmt.Sprintf("%s key usage is SIGN_VERIFY which is not valid for GenerateDataKey.", k.GetArn())
 
-			r.logger.Warnf(msg)
+			r.logger.WarnContext(r.request.Context(), "invalid key usage", "keyArn", k.GetArn(), "keyUsage", k.GetMetadata().KeyUsage)
 			return NewInvalidKeyUsageException(msg), nil
 		}
 
 		msg := fmt.Sprintf("%s key KeySpec is %s which is not valid for GenerateDataKey.", k.GetArn(), k.GetMetadata().CustomerMasterKeySpec)
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "invalid key spec", "keyArn", k.GetArn(), "keySpec", k.GetMetadata().CustomerMasterKeySpec)
 		return NewInvalidKeyUsageException(msg), nil
 	}
 

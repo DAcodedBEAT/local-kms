@@ -20,7 +20,7 @@ func (r *RequestHandler) DescribeKey() Response {
 	if body.KeyId == nil {
 		msg := "KeyId is a required parameter"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "field", "KeyId", "error", "required parameter")
 		return NewMissingParameterResponse(msg)
 	}
 
@@ -35,7 +35,7 @@ func (r *RequestHandler) DescribeKey() Response {
 
 	//---
 
-	r.logger.Infof("Key described: %s\n", key.GetArn())
+	r.logger.DebugContext(r.request.Context(), "Key described", "keyArn", key.GetArn())
 
 	return NewResponse(200, map[string]*cmk.KeyMetadata{
 		"KeyMetadata": key.GetMetadata(),

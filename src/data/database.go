@@ -1,8 +1,8 @@
 package data
 
 import (
-	"fmt"
-	"os"
+	"context"
+	"log/slog"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -17,16 +17,16 @@ type Database struct {
 	dbPath   string
 }
 
-func NewDatabase(path string) *Database {
+func NewDatabase(ctx context.Context, path string) *Database {
 
 	db, err := leveldb.OpenFile(path, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "WARN: failed to open database at %s (%v); attempting recovery\n", path, err)
+		slog.Default().WarnContext(ctx, "database open failed, attempting recovery", "path", path, "error", err)
 		db, err = leveldb.RecoverFile(path, nil)
 		if err != nil {
 			panic(err)
 		}
-		fmt.Fprintf(os.Stderr, "WARN: database at %s recovered from corrupted state\n", path)
+		slog.Default().WarnContext(ctx, "database recovered from corrupted state", "path", path)
 	}
 
 	return &Database{
@@ -51,10 +51,15 @@ func (e *InvalidMarkerExceptionError) Error() string {
 
 // Can delete any object type. e.g. key, alias, etc.
 func (d *Database) DeleteObject(arn string) error {
-	// Check available disk space before writing (deletes also require space for compaction)
 	if err := CheckDiskSpace(d.dbPath); err != nil {
 		return err
 	}
-
 	return d.database.Delete([]byte(arn), syncWrite)
+}
+
+func (d *Database) put(key []byte, value []byte) error {
+	if err := CheckDiskSpace(d.dbPath); err != nil {
+		return err
+	}
+	return d.database.Put(key, value, syncWrite)
 }

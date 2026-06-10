@@ -75,6 +75,10 @@ Tool will:
 - `-db` - Path to KMS data dir (default: `/data`)
 - `-remove-corrupted` - Remove corrupted entries (without flag, scan only)
 
+## Environment Variables
+
+- `KMS_DATA_PATH` - Path to database directory (if `-db` flag is not provided)
+
 ## Examples
 
 ### Check database health

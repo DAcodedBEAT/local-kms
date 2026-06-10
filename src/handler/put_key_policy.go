@@ -11,24 +11,18 @@ func (r *RequestHandler) PutKeyPolicy() Response {
 	var body *kms.PutKeyPolicyInput
 	err := r.decodeBodyInto(&body)
 
-	if err != nil {
-		body = &kms.PutKeyPolicyInput{}
-	}
+	//--------------------------------
+	// Validation
 
 	if body.KeyId == nil {
-		msg := "1 validation error detected: Value null at 'keyId' failed to satisfy constraint: Member must not be null"
-
-		r.logger.Warnf(msg)
-		return NewValidationExceptionResponse(msg)
+		return r.nullValidationResponse("keyId")
 	}
 
 	if body.Policy == nil {
-		msg := "1 validation error detected: Value null at 'policy' failed to satisfy constraint: Member must not be null"
-
-		r.logger.Warnf(msg)
-		return NewValidationExceptionResponse(msg)
+		return r.nullValidationResponse("policy")
 	}
 
+	//---
 	policyName := "default"
 	if body.PolicyName != nil {
 		policyName = *body.PolicyName
@@ -37,14 +31,14 @@ func (r *RequestHandler) PutKeyPolicy() Response {
 	if policyName != "default" {
 		msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'policyName' failed to satisfy constraint: Member must satisfy regular expression pattern: [\\w]+", policyName)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "policyName", policyName)
 		return NewValidationExceptionResponse(msg)
 	}
 
 	if len(*body.Policy) > 32768 {
 		msg := "1 validation error detected: Value at 'policy' failed to satisfy constraint: Member must have length less than or equal to 32768"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "parameter", "Policy")
 		return NewValidationExceptionResponse(msg)
 	}
 
@@ -58,7 +52,7 @@ func (r *RequestHandler) PutKeyPolicy() Response {
 	if key == nil {
 		msg := fmt.Sprintf("Key '%s' does not exist", keyArn)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "key not found", "keyArn", keyArn)
 		return NewNotFoundExceptionResponse(msg)
 	}
 
@@ -71,13 +65,13 @@ func (r *RequestHandler) PutKeyPolicy() Response {
 
 	err = r.database.SaveKey(key)
 	if err != nil {
-		r.logger.Error(err)
+		r.logger.ErrorContext(r.request.Context(), "internal error", "error", err)
 		return NewInternalFailureExceptionResponse(err.Error())
 	}
 
 	//---
 
-	r.logger.Infof("New Key Policy set for: %s\n", key.GetArn())
+	r.logger.InfoContext(r.request.Context(), "Key policy set", "keyArn", key.GetArn())
 
 	return NewResponse(200, nil)
 }

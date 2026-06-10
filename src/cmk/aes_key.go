@@ -133,12 +133,12 @@ func (k *AesKey) UnmarshalYAML(unmarshal func(any) error) error {
 
 	yk := YamlKey{}
 	if err := unmarshal(&yk); err != nil {
-		return &UnmarshalYAMLError{err.Error()}
+		return &UnmarshalYAMLError{message: err.Error(), cause: err}
 	}
 
 	k.Type = TypeAes
 	k.Metadata = yk.Metadata
-	defaultSeededKeyMetadata(&k.Metadata)
+	k.Metadata.Initialize(k.Metadata.KeyId)
 	k.NextKeyRotation = yk.NextKeyRotation
 
 	//-------------------------
@@ -149,12 +149,12 @@ func (k *AesKey) UnmarshalYAML(unmarshal func(any) error) error {
 		case len(yk.BackingKeys) == 0:
 			return nil
 		case len(yk.BackingKeys) > 1:
-			return &UnmarshalYAMLError{"EXTERNAL keys can only have a single backing key"}
+			return &UnmarshalYAMLError{message: "EXTERNAL keys can only have a single backing key"}
 		}
 	}
 
 	if len(yk.BackingKeys) < 1 {
-		return &UnmarshalYAMLError{"At least one backing key must be supplied"}
+		return &UnmarshalYAMLError{message: "At least one backing key must be supplied"}
 	}
 
 	k.BackingKeys = make([][32]byte, len(yk.BackingKeys))
@@ -163,14 +163,13 @@ func (k *AesKey) UnmarshalYAML(unmarshal func(any) error) error {
 
 		keyBytes, err := hex.DecodeString(keyStr)
 		if err != nil {
-			return &UnmarshalYAMLError{fmt.Sprintf("Unable to decode hex key: %s", err)}
+			return &UnmarshalYAMLError{message: fmt.Sprintf("Unable to decode hex key: %s", err), cause: err}
 		}
 
 		if len(keyBytes) != 32 {
-			return &UnmarshalYAMLError{
-				fmt.Sprintf(
-					"Backing key must be hex encoded and exactly 32 bytes (256 bit). %d bytes found",
-					len(keyBytes)),
+			return &UnmarshalYAMLError{message: fmt.Sprintf(
+				"Backing key must be hex encoded and exactly 32 bytes (256 bit). %d bytes found",
+				len(keyBytes)),
 			}
 		}
 

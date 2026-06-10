@@ -7,11 +7,6 @@ import (
 )
 
 func (d *Database) SaveTag(k cmk.Key, t *Tag) error {
-	// Check available disk space before writing
-	if err := CheckDiskSpace(d.dbPath); err != nil {
-		return err
-	}
-
 	// Validate the tag data before writing to prevent corruption
 	if err := ValidateTagData(t); err != nil {
 		return err
@@ -23,7 +18,7 @@ func (d *Database) SaveTag(k cmk.Key, t *Tag) error {
 	}
 
 	// We save under a value of the key's ARN, plus the tag key value.
-	return d.database.Put([]byte(k.GetArn()+"/tag/"+t.TagKey), encoded, syncWrite)
+	return d.put([]byte(k.GetArn()+"/tag/"+t.TagKey), encoded)
 }
 
 // CountTags returns the number of tags stored for the given key ARN.

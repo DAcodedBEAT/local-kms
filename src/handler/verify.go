@@ -19,30 +19,21 @@ func (r *RequestHandler) Verify() Response {
 	// Validation
 
 	if body.KeyId == nil {
-		msg := "1 validation error detected: Value null at 'keyId' failed to satisfy constraint: Member must not be null"
-
-		r.logger.Warnf(msg)
-		return NewValidationExceptionResponse(msg)
+		return r.nullValidationResponse("keyId")
 	}
 
 	if body.Signature == nil {
-		msg := "1 validation error detected: Value null at 'Signature' failed to satisfy constraint: Member must not be null"
-
-		r.logger.Warnf(msg)
-		return NewValidationExceptionResponse(msg)
+		return r.nullValidationResponse("Signature")
 	}
 
 	if body.Message == nil {
-		msg := "1 validation error detected: Value null at 'Message' failed to satisfy constraint: Member must not be null"
-
-		r.logger.Warnf(msg)
-		return NewValidationExceptionResponse(msg)
+		return r.nullValidationResponse("Message")
 	}
 
 	if len(body.Message) == 0 {
 		msg := "1 validation error detected: Value at 'Message' failed to satisfy constraint: Member must have length greater than or equal to 1"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "parameter", "Message")
 		return NewValidationExceptionResponse(msg)
 	}
 
@@ -50,15 +41,12 @@ func (r *RequestHandler) Verify() Response {
 		msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'Message' failed to satisfy "+
 			"constraint: Member must have minimum length of 1 and maximum length of 4096.", string(body.Message))
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "messageLength", len(body.Message))
 		return NewValidationExceptionResponse(msg)
 	}
 
 	if body.SigningAlgorithm == "" {
-		msg := "1 validation error detected: Value null at 'SigningAlgorithm' failed to satisfy constraint: Member must not be null"
-
-		r.logger.Warnf(msg)
-		return NewValidationExceptionResponse(msg)
+		return r.nullValidationResponse("SigningAlgorithm")
 	}
 
 	if body.MessageType == "" {
@@ -69,7 +57,7 @@ func (r *RequestHandler) Verify() Response {
 		msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'messageType' failed to satisfy "+
 			"constraint: Member must satisfy enum value set: [DIGEST, RAW]", body.MessageType)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "messageType", body.MessageType)
 		return NewValidationExceptionResponse(msg)
 	}
 
@@ -89,7 +77,7 @@ func (r *RequestHandler) Verify() Response {
 
 		if k.GetMetadata().KeyUsage == cmk.UsageEncryptDecrypt {
 			msg := fmt.Sprintf("%s key usage is ENCRYPT_DECRYPT which is not valid for signing.", k.GetArn())
-			r.logger.Warnf(msg)
+			r.logger.WarnContext(r.request.Context(), "invalid key usage", "keyArn", k.GetArn(), "keyUsage", k.GetMetadata().KeyUsage)
 			return NewInvalidKeyUsageException(msg)
 		}
 
@@ -99,14 +87,14 @@ func (r *RequestHandler) Verify() Response {
 		if k.GetMetadata().KeyUsage == cmk.UsageEncryptDecrypt {
 			msg := fmt.Sprintf("%s key usage is ENCRYPT_DECRYPT which is not valid for signing.", k.GetArn())
 
-			r.logger.Warnf(msg)
+			r.logger.WarnContext(r.request.Context(), "invalid key usage", "keyArn", k.GetArn(), "keyUsage", k.GetMetadata().KeyUsage)
 			return NewInvalidKeyUsageException(msg)
 		}
 
 		signingKey = k
 	default:
 		msg := fmt.Sprintf("%s key usage is ENCRYPT_DECRYPT which is not valid for Verify.", k.GetArn())
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "invalid key usage", "keyArn", k.GetArn())
 		return NewInvalidKeyUsageException(msg)
 	}
 
@@ -121,13 +109,13 @@ func (r *RequestHandler) Verify() Response {
 	}
 
 	if err != nil {
-		r.logger.Error(err.Error())
+		r.logger.ErrorContext(r.request.Context(), "verify failed", "error", err)
 		return NewInvalidKeyUsageException(err.Error())
 	}
 
 	//---
 
-	r.logger.Infof("%s message verification %t with %s, using key %s\n", body.MessageType, valid, signingKey.GetMetadata().CustomerMasterKeySpec, key.GetArn())
+	r.logger.InfoContext(r.request.Context(), "Verify", "messageType", body.MessageType, "valid", valid, "algorithm", signingKey.GetMetadata().CustomerMasterKeySpec, "keyArn", key.GetArn())
 
 	if !valid {
 		return NewKMSInvalidSignatureException("")

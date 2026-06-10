@@ -1,18 +1,24 @@
 package src
 
 import (
-	log "github.com/sirupsen/logrus"
+	"context"
+	"log/slog"
+	"os"
+
+	"github.com/nsmithuk/local-kms/src/config"
 )
 
-var logger = log.New()
+var logger *slog.Logger
 
 func init() {
+	ctx := context.Background()
+	level := slog.LevelInfo
+	if v := config.GetEnv(ctx, "LOG_LEVEL", ""); v != "" {
+		_ = level.UnmarshalText([]byte(v))
+	}
 
-	//logger.SetLevel(log.DebugLevel)
-	logger.SetFormatter(&log.TextFormatter{
-		ForceColors:     true,
-		FullTimestamp:   true,
-		TimestampFormat: "2006-01-02 15:04:05.000",
-	})
-
+	logger = slog.New(&contextHandler{slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: level,
+	})})
+	slog.SetDefault(logger)
 }

@@ -1,56 +1,71 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 
+	"github.com/nsmithuk/local-kms/src/config"
 	"github.com/nsmithuk/local-kms/src/data"
 )
 
+var (
+	Version   string
+	GitCommit string
+)
+
 func main() {
+	ctx := context.Background()
+
+	Version = config.ResolveVersion(Version)
+	GitCommit = config.ResolveGitCommit(GitCommit)
+
+	slog.InfoContext(ctx, "Local KMS Recovery Utility", "version", Version, "commit", GitCommit)
+
 	dbPath := flag.String("db", "/data", "Path to the KMS data directory")
 	removeCorrupted := flag.Bool("remove-corrupted", false, "Remove corrupted entries (WARNING: destructive)")
 	flag.Parse()
 
 	if _, err := os.Stat(*dbPath); os.IsNotExist(err) {
-		log.Fatalf("Database path does not exist: %s", *dbPath)
+		slog.ErrorContext(ctx, "Database path does not exist", "path", *dbPath)
+		os.Exit(1)
 	}
 
-	fmt.Printf("Opening database at: %s\n", *dbPath)
-	db := data.NewDatabase(*dbPath)
+	slog.InfoContext(ctx, "Opening database", "path", *dbPath)
+	db := data.NewDatabase(ctx, *dbPath)
 	defer func() {
 		if err := db.Close(); err != nil {
-			fmt.Printf("Error closing database: %v\n", err)
+			slog.ErrorContext(ctx, "Error closing database", "error", err)
 		}
 	}()
 
-	fmt.Print("\n=== Running Health Check ===\n\n")
+	slog.InfoContext(ctx, "Running Health Check")
 
 	report := db.HealthCheck()
 
 	if report.DiskSpaceIssue != "" {
-		fmt.Printf("⚠ Disk space warning: %s\n\n", report.DiskSpaceIssue)
+		slog.WarnContext(ctx, "Disk space issue detected", "issue", report.DiskSpaceIssue)
 	}
 
 	if len(report.Entries) == 0 {
-		fmt.Println("✓ No corruption detected")
+		slog.InfoContext(ctx, "No corruption detected")
 		return
 	}
 
-	fmt.Printf("⚠ Found corruption:\n\n")
-	fmt.Printf("Corrupted Keys:    %d\n", report.CorruptedKeys)
-	fmt.Printf("Corrupted Aliases: %d\n", report.CorruptedAliases)
-	fmt.Printf("Corrupted Tags:    %d\n", report.CorruptedTags)
-	fmt.Println("\nDetails:")
+	slog.WarnContext(ctx, "Found corruption", 
+		"corrupted_keys", report.CorruptedKeys,
+		"corrupted_aliases", report.CorruptedAliases,
+		"corrupted_tags", report.CorruptedTags,
+	)
+
 	for i, entry := range report.Entries {
-		fmt.Printf("  %d. %s\n", i+1, entry.Description)
+		slog.InfoContext(ctx, "Corruption details", "index", i+1, "description", entry.Description)
 	}
 
 	if !*removeCorrupted {
-		fmt.Printf("\n\nTo remove corrupted entries:\n  recovery -db %s -remove-corrupted\n\n", *dbPath)
-		fmt.Println("⚠ WARNING: Destructive — ensure you have a backup first.")
+		slog.WarnContext(ctx, "Corruption found. To remove corrupted entries, run with -remove-corrupted flag.", "db", *dbPath)
 		os.Exit(1)
 	}
 
@@ -60,21 +75,21 @@ func main() {
 
 	var confirmation string
 	if _, err := fmt.Scanln(&confirmation); err != nil || confirmation != "yes" {
-		fmt.Println("Operation cancelled.")
+		slog.InfoContext(ctx, "Operation cancelled by user")
 		os.Exit(0)
 	}
 
+	slog.InfoContext(ctx, "User confirmed corruption removal")
 	removedCount := 0
 	for _, entry := range report.Entries {
-		fmt.Printf("Removing %s...", entry.DBKey)
 		if err := db.RemoveCorruptedEntry(entry.DBKey); err != nil {
-			fmt.Printf(" ERROR: %v\n", err)
+			slog.ErrorContext(ctx, "Failed to remove corrupted entry", "db_key", entry.DBKey, "error", err)
 		} else {
-			fmt.Println(" ✓")
+			slog.InfoContext(ctx, "Successfully removed corrupted entry", "db_key", entry.DBKey)
 			removedCount++
 		}
 	}
 
-	fmt.Printf("\n✓ Removed %d corrupted entries\n\n", removedCount)
-	fmt.Printf("Run health check to verify:\n  recovery -db %s\n\n", *dbPath)
+	slog.InfoContext(ctx, "Cleanup complete", "removed_count", removedCount)
+	slog.InfoContext(ctx, "Run health check again to verify results", "db", *dbPath)
 }

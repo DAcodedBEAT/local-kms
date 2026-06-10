@@ -35,7 +35,7 @@ func (r *RequestHandler) ListKeys() Response {
 		msg := fmt.Sprintf("1 validation error detected: Value '%d' at 'limit' failed to satisfy "+
 			"constraint: Minimum value of 1. Maximum value of 1000.", limit)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "limit", limit)
 		return NewValidationExceptionResponse(msg)
 	}
 
@@ -48,11 +48,11 @@ func (r *RequestHandler) ListKeys() Response {
 	if err != nil {
 
 		if _, ok := err.(*data.InvalidMarkerExceptionError); ok {
-			r.logger.Warnf("Invalid marker passed")
+			r.logger.WarnContext(r.request.Context(), "Invalid marker")
 			return New400ExceptionResponse("InvalidMarkerException", "")
 		}
 
-		r.logger.Error(err)
+		r.logger.ErrorContext(r.request.Context(), "internal error", "error", err)
 		return NewInternalFailureExceptionResponse(err.Error())
 	}
 
@@ -89,7 +89,7 @@ func (r *RequestHandler) ListKeys() Response {
 
 	//---
 
-	r.logger.Infof("%d keys listed\n", len(keys))
+	r.logger.DebugContext(r.request.Context(), "Keys listed", "count", len(keys))
 
 	return NewResponse(200, response)
 }

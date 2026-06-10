@@ -39,7 +39,8 @@ Env vars:
 - `KMS_REGION` - AWS region (default: eu-west-2)
 - `KMS_DATA_PATH` - Path to database directory (default: /tmp/local-kms)
 - `KMS_SEED_PATH` - Path to seed file (default: /init/seed.yaml)
-- `PORT` - HTTP port (default: 8080)
+- `KMS_PORT` - HTTP port (default: 8080)
+- `KMS_LOG_LEVEL` - Log level (e.g., DEBUG, INFO, WARN, ERROR) (default: INFO)
 
 ### Recovery Tool
 ```bash

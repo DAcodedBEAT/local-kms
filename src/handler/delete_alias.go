@@ -22,7 +22,7 @@ func (r *RequestHandler) DeleteAlias() Response {
 	if body.AliasName == nil {
 		msg := "AliasName is a required parameter"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "field", "AliasName", "error", "required parameter")
 		return NewMissingParameterResponse(msg)
 	}
 
@@ -30,13 +30,13 @@ func (r *RequestHandler) DeleteAlias() Response {
 		msg := "Alias must start with the prefix \"alias/\". Please see " +
 			"http://docs.aws.amazon.com/kms/latest/developerguide/programming-aliases.html"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "field", "AliasName", "error", "missing 'alias/' prefix")
 		return NewValidationExceptionResponse(msg)
 	}
 
 	if strings.HasPrefix(*body.AliasName, "alias/aws/") {
 		msg := fmt.Sprintf("The alias %s is a AWS managed alias and cannot be deleted.", *body.AliasName)
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "invalid key state", "aliasName", *body.AliasName)
 		return NewKMSInvalidStateExceptionResponse(msg)
 	}
 
@@ -49,18 +49,18 @@ func (r *RequestHandler) DeleteAlias() Response {
 	if err != nil {
 		msg := fmt.Sprintf("Alias '%s' does not exist", aliasArn)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "alias not found", "aliasArn", aliasArn)
 		return NewNotFoundExceptionResponse(msg)
 	}
 
 	if err := r.database.DeleteObject(aliasArn); err != nil {
-		r.logger.Error(err)
+		r.logger.ErrorContext(r.request.Context(), "internal error", "error", err)
 		return NewInternalFailureExceptionResponse(err.Error())
 	}
 
 	//---
 
-	r.logger.Infof("Alias deleted: %s\n", aliasArn)
+	r.logger.InfoContext(r.request.Context(), "Alias deleted", "aliasArn", aliasArn)
 
 	return NewResponse(200, nil)
 }

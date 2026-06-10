@@ -1,25 +1,27 @@
 package src
 
 import (
+	"context"
 	"fmt"
+	"github.com/gofrs/uuid"
 	"github.com/nsmithuk/local-kms/src/config"
 	"github.com/nsmithuk/local-kms/src/data"
 	"github.com/nsmithuk/local-kms/src/handler"
-	log "github.com/sirupsen/logrus"
 	"net/http"
+	"os"
 	"reflect"
 	"strings"
 )
 
-func Run(port, seedPath string) {
+func Run(ctx context.Context, port, seedPath string) {
 
 	//-----------
 	// DB Setup
 
-	database := data.NewDatabase(config.DatabasePath)
+	database := data.NewDatabase(ctx, config.DatabasePath)
 	defer func() {
 		if err := database.Close(); err != nil {
-			logger.Errorf("Failed to close database: %v", err)
+			logger.ErrorContext(ctx, "Failed to close database", "error", err)
 		}
 	}()
 
@@ -28,24 +30,24 @@ func Run(port, seedPath string) {
 
 	healthReport := database.HealthCheck()
 	if healthReport.DiskSpaceIssue != "" {
-		logger.Warnf("⚠ Low disk space: %s", healthReport.DiskSpaceIssue)
+		logger.WarnContext(ctx, "Low disk space", "issue", healthReport.DiskSpaceIssue)
 	}
 	if len(healthReport.Entries) > 0 {
-		logger.Warnf("⚠ Database corruption detected!")
-		logger.Warnf("Corrupted Keys:    %d", healthReport.CorruptedKeys)
-		logger.Warnf("Corrupted Aliases: %d", healthReport.CorruptedAliases)
-		logger.Warnf("Corrupted Tags:    %d", healthReport.CorruptedTags)
-		logger.Warn("Corruption details:")
+		logger.WarnContext(ctx, "Database corruption detected",
+			"corruptedKeys", healthReport.CorruptedKeys,
+			"corruptedAliases", healthReport.CorruptedAliases,
+			"corruptedTags", healthReport.CorruptedTags,
+		)
 		for _, entry := range healthReport.Entries {
-			logger.Warnf("  - %s", entry.Description)
+			logger.WarnContext(ctx, "Corruption entry", "description", entry.Description)
 		}
-		logger.Warn("Run 'make build-recovery && ./recovery -db " + config.DatabasePath + "' to scan and repair")
+		logger.WarnContext(ctx, "Run recovery tool", "command", "make build-recovery && ./recovery -db "+config.DatabasePath)
 	}
 
 	//-----------
 	// Seeding
 
-	seed(seedPath, database)
+	seed(ctx, seedPath, database)
 
 	//-----------
 	// Start
@@ -59,18 +61,26 @@ func Run(port, seedPath string) {
 		handleRequest(w, r, database)
 	})
 
-	logger.Infof("Data will be stored in %s", config.DatabasePath)
-	logger.Infof("Local KMS started on 0.0.0.0:%s", port)
+	logger.InfoContext(ctx, "Data storage path", "path", config.DatabasePath)
+	logger.InfoContext(ctx, "Local KMS started", "addr", "0.0.0.0:"+port)
 
-	err := http.ListenAndServe(":"+port, nil)
-	if err != nil {
-		log.Fatal("ListenAndServe: ", err)
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
+		logger.ErrorContext(ctx, "Server failed", "error", err)
+		os.Exit(1)
 	}
 
 }
 
 func handleRequest(w http.ResponseWriter, r *http.Request, database *data.Database) {
-	logger.Debugf("%s %s %s\n", r.RemoteAddr, r.Method, r.URL)
+	requestId, _ := uuid.NewV4()
+	target := strings.Split(r.Header.Get("X-Amz-Target"), ".")
+	operation := ""
+	if len(target) >= 2 {
+		operation = target[1]
+	}
+	ctx := withRequestMeta(r.Context(), requestId.String(), operation, r.RemoteAddr)
+
+	logger.DebugContext(ctx, "request", "method", r.Method, "url", r.URL.String())
 
 	if r.URL.Path != "/" {
 		error404(w)
@@ -85,19 +95,10 @@ func handleRequest(w http.ResponseWriter, r *http.Request, database *data.Databa
 	} else {
 
 		w.Header().Set("Content-Type", "application/x-amz-json-1.1")
+		w.Header().Set("x-amzn-requestid", requestId.String())
 
-		h := handler.NewRequestHandler(r, logger, database)
+		h := handler.NewRequestHandler(r.WithContext(ctx), logger, database)
 
-		/*
-			The target endpoint is specified in the `X-Amz-Target` header.
-
-			The format is:	TrentService.<method>
-			For example: 	TrentService.ListKeys
-		*/
-
-		target := strings.Split(r.Header.Get("X-Amz-Target"), ".")
-
-		// Ensure we have at least the 2 components we expect.
 		if len(target) >= 2 {
 
 			method := reflect.ValueOf(h).MethodByName(target[1])
@@ -107,29 +108,36 @@ func handleRequest(w http.ResponseWriter, r *http.Request, database *data.Databa
 				result := method.Call([]reflect.Value{})
 
 				if len(result) == 0 {
-					logger.Panicf("Missing expected response from reflected method call\n")
+					logger.ErrorContext(ctx, "Missing expected response from reflected method call")
+					http.Error(w, "internal error", http.StatusInternalServerError)
+					return
 				}
 
 				response, ok := result[0].Interface().(handler.Response)
 
 				if !ok {
-					logger.Panicf("Unable to assert type of returned response\n")
+					logger.ErrorContext(ctx, "Unable to assert type of returned response")
+					http.Error(w, "internal error", http.StatusInternalServerError)
+					return
 				}
 
-				respond(w, response)
+				respond(ctx, w, response)
 				return
 			}
 
 		}
 
 		// If we couldn't find a valid method matching the request
-		error501(w, r)
+		logger.WarnContext(ctx, "unimplemented operation", "target", r.Header.Get("X-Amz-Target"))
+		w.WriteHeader(501)
+		_, _ = fmt.Fprintf(w, "Passed X-Amz-Target (%s) is not implemented", r.Header.Get("X-Amz-Target"))
 		return
 	}
 
 }
 
-func respond(w http.ResponseWriter, r handler.Response) {
+func respond(ctx context.Context, w http.ResponseWriter, r handler.Response) {
+	logger.DebugContext(ctx, "response", "status", r.Code)
 	w.WriteHeader(r.Code)
 	_, _ = fmt.Fprint(w, r.Body)
 }
@@ -147,9 +155,4 @@ func error405(w http.ResponseWriter) {
 func error415(w http.ResponseWriter) {
 	w.WriteHeader(415)
 	_, _ = fmt.Fprint(w, "Only JSON based content types accepted")
-}
-
-func error501(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(501)
-	_, _ = fmt.Fprintf(w, "Passed X-Amz-Target (%s) is not implemented", r.Header.Get("X-Amz-Target"))
 }

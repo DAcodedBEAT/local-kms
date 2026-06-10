@@ -47,7 +47,7 @@ func (r *RequestHandler) Encrypt() Response {
 	if body.KeyId == nil {
 		msg := "KeyId is a required parameter"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "parameter", "KeyId")
 		return NewMissingParameterResponse(msg)
 	}
 
@@ -55,7 +55,7 @@ func (r *RequestHandler) Encrypt() Response {
 		msg := "1 validation error detected: Value at 'plaintext' failed to satisfy constraint: Member must have " +
 			"length greater than or equal to 1"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "parameter", "Plaintext")
 		return NewValidationExceptionResponse(msg)
 	}
 
@@ -63,7 +63,7 @@ func (r *RequestHandler) Encrypt() Response {
 		msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'Plaintext' failed to satisfy "+
 			"constraint: Member must have minimum length of 1 and maximum length of 4096.", string(body.Plaintext))
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "plaintextLength", len(body.Plaintext))
 		return NewValidationExceptionResponse(msg)
 	}
 
@@ -89,7 +89,7 @@ func (r *RequestHandler) Encrypt() Response {
 
 		cipherResponse, err = k.EncryptAndPackage(body.Plaintext, body.EncryptionContext)
 		if err != nil {
-			r.logger.Error(err.Error())
+			r.logger.ErrorContext(r.request.Context(), "internal error", "error", err)
 			return NewInternalFailureExceptionResponse(err.Error())
 		}
 
@@ -97,20 +97,20 @@ func (r *RequestHandler) Encrypt() Response {
 
 		if k.GetMetadata().KeyUsage != cmk.UsageEncryptDecrypt {
 			msg := fmt.Sprintf("%s key usage is %s which is not valid for Encrypt.", k.GetArn(), k.GetMetadata().KeyUsage)
-			r.logger.Warnf(msg)
+			r.logger.WarnContext(r.request.Context(), "invalid key usage", "keyArn", k.GetArn(), "keyUsage", k.GetMetadata().KeyUsage)
 			return NewInvalidKeyUsageException(msg)
 		}
 
 		algo := cmk.EncryptionAlgorithm(body.EncryptionAlgorithm)
 		if maxBytes := rsaMaxPlaintextBytes(k.GetMetadata().KeySpec, algo); maxBytes > 0 && len(body.Plaintext) > maxBytes {
 			msg := fmt.Sprintf("Plaintext is too long for the chosen RSA public key. The plaintext must be no longer than %d bytes for %s with %s.", maxBytes, k.GetMetadata().KeySpec, algo)
-			r.logger.Warnf(msg)
+			r.logger.WarnContext(r.request.Context(), "validation failed", "keyArn", k.GetArn(), "keySpec", k.GetMetadata().KeySpec, "algorithm", algo)
 			return NewInvalidKeyUsageException(msg)
 		}
 
 		cipherResponse, err = k.Encrypt(body.Plaintext, cmk.EncryptionAlgorithm(body.EncryptionAlgorithm))
 		if err != nil {
-			r.logger.Error(err.Error())
+			r.logger.ErrorContext(r.request.Context(), "internal error", "error", err)
 			return NewInternalFailureExceptionResponse(err.Error())
 		}
 
@@ -118,7 +118,7 @@ func (r *RequestHandler) Encrypt() Response {
 
 		if k.GetMetadata().KeyUsage == cmk.UsageSignVerify {
 			msg := fmt.Sprintf("%s key usage is SIGN_VERIFY which is not valid for Encrypt.", k.GetArn())
-			r.logger.Warnf(msg)
+			r.logger.WarnContext(r.request.Context(), "invalid key usage", "keyArn", k.GetArn(), "keyUsage", k.GetMetadata().KeyUsage)
 			return NewInvalidKeyUsageException(msg)
 		}
 
@@ -127,7 +127,7 @@ func (r *RequestHandler) Encrypt() Response {
 
 	//---
 
-	r.logger.Infof("Encryption called: %s\n", key.GetArn())
+	r.logger.InfoContext(r.request.Context(), "Encrypted", "keyArn", key.GetArn())
 
 	return NewResponse(200, &struct {
 		KeyId               string

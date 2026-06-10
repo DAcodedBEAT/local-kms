@@ -13,11 +13,6 @@ import (
 )
 
 func (d *Database) SaveKey(k cmk.Key) error {
-	// Check available disk space before writing
-	if err := CheckDiskSpace(d.dbPath); err != nil {
-		return err
-	}
-
 	// Validate the key data before writing to prevent corruption
 	if err := ValidateKeyData(k); err != nil {
 		return err
@@ -28,7 +23,7 @@ func (d *Database) SaveKey(k cmk.Key) error {
 		return err
 	}
 
-	return d.database.Put([]byte(k.GetArn()), encoded, syncWrite)
+	return d.put([]byte(k.GetArn()), encoded)
 }
 
 func (d *Database) LoadKey(arn string) (cmk.Key, error) {

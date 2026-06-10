@@ -28,14 +28,14 @@ func (r *RequestHandler) CreateAlias() Response {
 	if body.TargetKeyId == nil {
 		msg := "TargetKeyId is a required parameter"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "field", "TargetKeyId", "error", "required parameter")
 		return NewMissingParameterResponse(msg)
 	}
 
 	if body.AliasName == nil {
 		msg := "AliasName is a required parameter"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "field", "AliasName", "error", "required parameter")
 		return NewMissingParameterResponse(msg)
 	}
 
@@ -43,13 +43,13 @@ func (r *RequestHandler) CreateAlias() Response {
 		msg := fmt.Sprintf("The specified alias name %q is not valid. An alias name must begin with 'alias/' "+
 			"followed by one or more alphanumeric characters, forward slashes, underscores, or dashes.", *body.AliasName)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "aliasName", *body.AliasName)
 		return NewInvalidAliasNameExceptionResponse(msg)
 	}
 
 	if strings.HasPrefix(*body.AliasName, "alias/aws/") {
 		msg := fmt.Sprintf("The alias namespace \"alias/aws/\" is reserved for AWS managed keys and cannot be used for customer managed keys.")
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "aliasName", *body.AliasName)
 		return NewNotAuthorizedExceptionResponse(msg)
 	}
 
@@ -57,7 +57,7 @@ func (r *RequestHandler) CreateAlias() Response {
 		msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'AliasName' failed to satisfy "+
 			"constraint: Member must have length less than or equal to 256", *body.AliasName)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "aliasName", *body.AliasName)
 		return NewValidationExceptionResponse(msg)
 	}
 
@@ -66,7 +66,7 @@ func (r *RequestHandler) CreateAlias() Response {
 	// AWS rejects alias names as TargetKeyId — aliases must refer to keys, not other aliases.
 	if strings.HasPrefix(*body.TargetKeyId, "alias/") {
 		msg := "Aliases must refer to keys. Not aliases"
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "field", "TargetKeyId", "error", "must refer to a key, not an alias")
 		return NewValidationExceptionResponse(msg)
 	}
 
@@ -78,7 +78,7 @@ func (r *RequestHandler) CreateAlias() Response {
 	if key == nil {
 		msg := fmt.Sprintf("Key '%s' does not exist", target)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "key not found", "keyArn", target)
 		return NewNotFoundExceptionResponse(msg)
 	}
 
@@ -88,7 +88,7 @@ func (r *RequestHandler) CreateAlias() Response {
 		// Key is pending deletion; cannot create alias
 		msg := fmt.Sprintf("%s is pending deletion.", target)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "key pending deletion", "keyArn", target)
 		return NewKMSInvalidStateExceptionResponse(msg)
 	}
 
@@ -101,7 +101,7 @@ func (r *RequestHandler) CreateAlias() Response {
 	if err == nil {
 		msg := fmt.Sprintf("An alias with the name %s already exists", aliasArn)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "alias already exists", "aliasArn", aliasArn)
 		return NewAlreadyExistsExceptionResponse(msg)
 	}
 
@@ -115,11 +115,11 @@ func (r *RequestHandler) CreateAlias() Response {
 	}
 
 	if err := r.database.SaveAlias(alias); err != nil {
-		r.logger.Error(err)
+		r.logger.ErrorContext(r.request.Context(), "internal error", "error", err)
 		return NewInternalFailureExceptionResponse(err.Error())
 	}
 
-	r.logger.Infof("New alias created: %s -> %s\n", alias.AliasArn, key.GetArn())
+	r.logger.InfoContext(r.request.Context(), "Alias created", "aliasArn", alias.AliasArn, "keyArn", key.GetArn())
 
 	return NewResponse(200, nil)
 }

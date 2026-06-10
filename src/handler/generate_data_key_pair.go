@@ -30,7 +30,7 @@ func (r *RequestHandler) GenerateDataKeyPair() Response {
 
 	//---
 
-	r.logger.Infof("Data key pair generated with plaintext: %s\n", keyResponse.KeyId)
+	r.logger.InfoContext(r.request.Context(), "Data key pair generated with plaintext", "keyArn", keyResponse.KeyId)
 
 	return NewResponse(200, keyResponse)
 }
@@ -50,14 +50,14 @@ func (r *RequestHandler) generateDataKeyPair() (Response, *GenerateDataKeyPairRe
 	if body.KeyId == nil {
 		msg := "KeyId is a required parameter"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "parameter", "KeyId")
 		return NewMissingParameterResponse(msg), nil
 	}
 
 	if body.KeyPairSpec == "" {
 		msg := "1 validation error detected: KeyPairSpec is required."
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "parameter", "KeyPairSpec")
 		return NewValidationExceptionResponse(msg), nil
 	}
 
@@ -101,6 +101,7 @@ func (r *RequestHandler) generateDataKeyPair() (Response, *GenerateDataKeyPairRe
 
 		k, err := ecdsa.GenerateKey(curve, rand.Reader)
 		if err != nil {
+			r.logger.ErrorContext(r.request.Context(), "failed to generate EC key", "error", err)
 			return NewInternalFailureExceptionResponse(err.Error()), nil
 		}
 
@@ -125,6 +126,7 @@ func (r *RequestHandler) generateDataKeyPair() (Response, *GenerateDataKeyPairRe
 
 		k, err := rsa.GenerateKey(rand.Reader, bits)
 		if err != nil {
+			r.logger.ErrorContext(r.request.Context(), "failed to generate RSA key", "error", err)
 			return NewInternalFailureExceptionResponse(err.Error()), nil
 		}
 
@@ -133,17 +135,19 @@ func (r *RequestHandler) generateDataKeyPair() (Response, *GenerateDataKeyPairRe
 
 	default:
 		msg := "1 validation error detected: KeyPairSpec is invalid."
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "parameter", "KeyId")
 		return NewValidationExceptionResponse(msg), nil
 	}
 
 	public, err := x509.MarshalPKIXPublicKey(publicKey)
 	if err != nil {
+		r.logger.ErrorContext(r.request.Context(), "failed to marshal public key", "error", err)
 		return NewInternalFailureExceptionResponse(err.Error()), nil
 	}
 
 	private, err := x509.MarshalPKCS8PrivateKey(privateKey)
 	if err != nil {
+		r.logger.ErrorContext(r.request.Context(), "failed to marshal private key", "error", err)
 		return NewInternalFailureExceptionResponse(err.Error()), nil
 	}
 
@@ -156,7 +160,7 @@ func (r *RequestHandler) generateDataKeyPair() (Response, *GenerateDataKeyPairRe
 
 		cipherResponse, err = k.EncryptAndPackage(private, body.EncryptionContext)
 		if err != nil {
-			r.logger.Error(err.Error())
+			r.logger.ErrorContext(r.request.Context(), "internal error", "error", err)
 			return NewInternalFailureExceptionResponse(err.Error()), nil
 		}
 
@@ -164,12 +168,12 @@ func (r *RequestHandler) generateDataKeyPair() (Response, *GenerateDataKeyPairRe
 
 		if k.GetMetadata().KeyUsage == cmk.UsageSignVerify {
 			msg := fmt.Sprintf("%s key usage is %s which is not valid for GenerateDataKeyPair.", k.GetArn(), k.GetMetadata().KeyUsage)
-			r.logger.Warnf(msg)
+			r.logger.WarnContext(r.request.Context(), "invalid key usage", "keyArn", k.GetArn(), "keyUsage", k.GetMetadata().KeyUsage)
 			return NewInvalidKeyUsageException(msg), nil
 		}
 
 		msg := fmt.Sprintf("%s key KeySpec is %s which is not valid for GenerateDataKeyPair.", k.GetArn(), k.GetMetadata().CustomerMasterKeySpec)
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "invalid key spec", "keyArn", k.GetArn(), "keySpec", k.GetMetadata().CustomerMasterKeySpec)
 		return NewInvalidKeyUsageException(msg), nil
 	}
 

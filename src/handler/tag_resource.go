@@ -2,11 +2,9 @@ package handler
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/cmk"
-	"github.com/nsmithuk/local-kms/src/data"
 )
 
 const maxTagsPerKey = 50
@@ -24,26 +22,11 @@ func (r *RequestHandler) TagResource() Response {
 	// Validation
 
 	if body.KeyId == nil {
-		msg := "1 validation error detected: Value null at 'keyId' failed to satisfy constraint: Member must not be null"
-
-		r.logger.Warnf(msg)
-		return NewValidationExceptionResponse(msg)
+		return r.nullValidationResponse("keyId")
 	}
 
 	if body.Tags == nil {
-		msg := "1 validation error detected: Value null at 'tags' failed to satisfy constraint: Member must not be null"
-
-		r.logger.Warnf(msg)
-		return NewValidationExceptionResponse(msg)
-	}
-
-	// Reject aws: prefix tags
-	for _, kv := range body.Tags {
-		if strings.HasPrefix(*kv.TagKey, "aws:") {
-			msg := fmt.Sprintf("The tag key 'aws:' prefix is reserved for AWS use and cannot be used in customer-managed key tags.")
-			r.logger.Warnf(msg)
-			return New400ExceptionResponse("TagException", msg)
-		}
+		return r.nullValidationResponse("tags")
 	}
 
 	response := r.validateTags(body.Tags)
@@ -62,7 +45,7 @@ func (r *RequestHandler) TagResource() Response {
 	case cmk.KeyStatePendingDeletion:
 		msg := fmt.Sprintf("%s is pending deletion.", *body.KeyId)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "key pending deletion", "keyId", *body.KeyId)
 		return NewKMSInvalidStateExceptionResponse(msg)
 
 	}
@@ -73,14 +56,14 @@ func (r *RequestHandler) TagResource() Response {
 	if len(body.Tags) > 0 {
 		currentCount, countErr := r.database.CountTags(key.GetArn())
 		if countErr != nil {
-			r.logger.Error(countErr)
+			r.logger.ErrorContext(r.request.Context(), "internal error", "error", countErr)
 			return NewInternalFailureExceptionResponse(countErr.Error())
 		}
 
 		// Determine how many of the incoming tags are new keys (not updates to existing ones)
 		existingTags, listErr := r.database.ListTags(key.GetArn(), int64(currentCount)+1, "")
 		if listErr != nil {
-			r.logger.Error(listErr)
+			r.logger.ErrorContext(r.request.Context(), "internal error", "error", listErr)
 			return NewInternalFailureExceptionResponse(listErr.Error())
 		}
 
@@ -99,7 +82,7 @@ func (r *RequestHandler) TagResource() Response {
 		if currentCount+newCount > maxTagsPerKey {
 			msg := fmt.Sprintf("The request would add %d new tag(s) to key %s, which would exceed the maximum of %d tags per key.",
 				newCount, key.GetArn(), maxTagsPerKey)
-			r.logger.Warnf(msg)
+			r.logger.WarnContext(r.request.Context(), "validation failed", "keyArn", key.GetArn(), "tagCount", newCount)
 			return New400ExceptionResponse("TagException", msg)
 		}
 	}
@@ -107,23 +90,9 @@ func (r *RequestHandler) TagResource() Response {
 	//--------------------------------
 	// Create the tags
 
-	if len(body.Tags) > 0 {
-		for _, kv := range body.Tags {
-			t := &data.Tag{
-				TagKey:   *kv.TagKey,
-				TagValue: *kv.TagValue,
-			}
-
-			if err := r.database.SaveTag(key, t); err != nil {
-				r.logger.Error(err)
-				return NewInternalFailureExceptionResponse(err.Error())
-			}
-
-			r.logger.Infof("New tag created: %s / %s\n", t.TagKey, t.TagValue)
-		}
+	if response := r.saveTags(key, body.Tags); !response.Empty() {
+		return response
 	}
-
-	//---
 
 	return NewResponse(200, nil)
 }

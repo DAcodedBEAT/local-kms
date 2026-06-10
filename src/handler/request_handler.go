@@ -2,10 +2,10 @@ package handler
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/nsmithuk/local-kms/src/data"
-	log "github.com/sirupsen/logrus"
 )
 
 //--------------------------------------------------------------------
@@ -13,11 +13,11 @@ import (
 
 type RequestHandler struct {
 	request  *http.Request
-	logger   *log.Logger
+	logger   *slog.Logger
 	database *data.Database
 }
 
-func NewRequestHandler(r *http.Request, l *log.Logger, d *data.Database) *RequestHandler {
+func NewRequestHandler(r *http.Request, l *slog.Logger, d *data.Database) *RequestHandler {
 	return &RequestHandler{
 		request:  r,
 		logger:   l,

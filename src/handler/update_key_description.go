@@ -21,7 +21,7 @@ func (r *RequestHandler) UpdateKeyDescription() Response {
 	if body.KeyId == nil {
 		msg := "KeyId is a required parameter"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "parameter", "KeyId")
 		return NewMissingParameterResponse(msg)
 	}
 
@@ -34,7 +34,7 @@ func (r *RequestHandler) UpdateKeyDescription() Response {
 		msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'description' failed to satisfy "+
 			"constraint: Member must have length less than or equal to 8192", *body.Description)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "value", *body.Description)
 		return NewValidationExceptionResponse(msg)
 	}
 
@@ -48,7 +48,7 @@ func (r *RequestHandler) UpdateKeyDescription() Response {
 	if key == nil {
 		msg := fmt.Sprintf("Key '%s' does not exist", keyArn)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "key not found", "keyArn", keyArn)
 		return NewNotFoundExceptionResponse(msg)
 	}
 
@@ -58,7 +58,7 @@ func (r *RequestHandler) UpdateKeyDescription() Response {
 		// Key is pending deletion; cannot create alias
 		msg := fmt.Sprintf("%s is pending deletion.", keyArn)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "key pending deletion", "keyArn", keyArn)
 		return NewKMSInvalidStateExceptionResponse(msg)
 	}
 
@@ -69,13 +69,13 @@ func (r *RequestHandler) UpdateKeyDescription() Response {
 
 	err = r.database.SaveKey(key)
 	if err != nil {
-		r.logger.Error(err)
+		r.logger.ErrorContext(r.request.Context(), "internal error", "error", err)
 		return NewInternalFailureExceptionResponse(err.Error())
 	}
 
 	//---
 
-	r.logger.Infof("Key description updated: %s\n", key.GetArn())
+	r.logger.InfoContext(r.request.Context(), "Key description updated", "keyArn", key.GetArn())
 
 	return NewResponse(200, nil)
 }

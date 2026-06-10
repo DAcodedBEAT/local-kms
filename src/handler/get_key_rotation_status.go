@@ -22,7 +22,7 @@ func (r *RequestHandler) GetKeyRotationStatus() Response {
 	if body.KeyId == nil {
 		msg := "KeyId is a required parameter"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "parameter", "KeyId")
 		return NewMissingParameterResponse(msg)
 	}
 
@@ -38,20 +38,20 @@ func (r *RequestHandler) GetKeyRotationStatus() Response {
 	// Only symmetric AWS_KMS keys support rotation
 	if key.GetMetadata().Origin == cmk.KeyOriginExternal {
 		msg := fmt.Sprintf("%s origin is EXTERNAL which is not valid for this operation.", key.GetArn())
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "unsupported operation", "keyArn", key.GetArn(), "origin", key.GetMetadata().Origin)
 		return NewUnsupportedOperationException(msg)
 	}
 
 	aesKey, ok := key.(*cmk.AesKey)
 	if !ok {
 		msg := fmt.Sprintf("Key '%s' does not support rotation", config.EnsureArn("key/", *body.KeyId))
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "unsupported operation", "keyArn", config.EnsureArn("key/", *body.KeyId))
 		return NewUnsupportedOperationException(msg)
 	}
 
 	//---
 
-	r.logger.Infof("Key rotation status returned: %s\n", key.GetArn())
+	r.logger.DebugContext(r.request.Context(), "Key rotation status returned", "keyArn", key.GetArn())
 
 	rotationEnabled := !aesKey.NextKeyRotation.IsZero()
 

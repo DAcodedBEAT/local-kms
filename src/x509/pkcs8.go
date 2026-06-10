@@ -49,7 +49,7 @@ func MarshalPKCS8PrivateKey(key any) ([]byte, error) {
 
 		oidBytes, err := asn1.Marshal(oid)
 		if err != nil {
-			return nil, errors.New("x509: failed to marshal curve OID: " + err.Error())
+			return nil, fmt.Errorf("x509: failed to marshal curve OID: %w", err)
 		}
 
 		privKey.Algo = pkix.AlgorithmIdentifier{
@@ -60,7 +60,7 @@ func MarshalPKCS8PrivateKey(key any) ([]byte, error) {
 		}
 
 		if privKey.PrivateKey, err = marshalECPrivateKeyWithOID(k, nil); err != nil {
-			return nil, errors.New("x509: failed to marshal EC private key while building PKCS#8: " + err.Error())
+			return nil, fmt.Errorf("x509: failed to marshal EC private key while building PKCS#8: %w", err)
 		}
 
 	case ed25519.PrivateKey:

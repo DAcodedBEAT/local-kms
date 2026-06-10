@@ -23,7 +23,7 @@ func (r *RequestHandler) DisableKeyRotation() Response {
 	if body.KeyId == nil {
 		msg := "KeyId is a required parameter"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "field", "KeyId", "error", "required parameter")
 		return NewMissingParameterResponse(msg)
 	}
 
@@ -37,7 +37,7 @@ func (r *RequestHandler) DisableKeyRotation() Response {
 	if key == nil {
 		msg := fmt.Sprintf("Key '%s' does not exist", keyArn)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "key not found", "keyArn", keyArn)
 		return NewNotFoundExceptionResponse(msg)
 	}
 
@@ -47,13 +47,13 @@ func (r *RequestHandler) DisableKeyRotation() Response {
 	if key.GetMetadata().Origin == cmk.KeyOriginExternal {
 		msg := fmt.Sprintf("%s origin is EXTERNAL which is not valid for this operation.", key.GetArn())
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "unsupported operation", "keyArn", key.GetArn(), "origin", key.GetMetadata().Origin)
 		return NewUnsupportedOperationException(msg)
 	}
 
 	if _, ok := key.(*cmk.AesKey); !ok {
 		msg := fmt.Sprintf("Key '%s' does not support rotation", keyArn)
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "unsupported operation", "keyArn", keyArn)
 		return NewUnsupportedOperationException(msg)
 	}
 
@@ -63,7 +63,7 @@ func (r *RequestHandler) DisableKeyRotation() Response {
 		// Key is pending deletion; cannot create alias
 		msg := fmt.Sprintf("%s is pending deletion.", keyArn)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "key pending deletion", "keyArn", keyArn)
 		return NewKMSInvalidStateExceptionResponse(msg)
 	}
 
@@ -73,7 +73,7 @@ func (r *RequestHandler) DisableKeyRotation() Response {
 		// Key is pending deletion; cannot create alias
 		msg := fmt.Sprintf("%s is disabled.", keyArn)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "key disabled", "keyArn", keyArn)
 		return NewDisabledExceptionResponse(msg)
 	}
 
@@ -87,13 +87,13 @@ func (r *RequestHandler) DisableKeyRotation() Response {
 
 	err = r.database.SaveKey(key)
 	if err != nil {
-		r.logger.Error(err)
+		r.logger.ErrorContext(r.request.Context(), "internal error", "error", err)
 		return NewInternalFailureExceptionResponse(err.Error())
 	}
 
 	//---
 
-	r.logger.Infof("Key rotation disabled: %s\n", key.GetMetadata().Arn)
+	r.logger.InfoContext(r.request.Context(), "Key rotation disabled", "keyArn", key.GetMetadata().Arn)
 
 	return NewResponse(200, nil)
 }

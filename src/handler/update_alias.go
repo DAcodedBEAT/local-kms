@@ -25,14 +25,14 @@ func (r *RequestHandler) UpdateAlias() Response {
 	if body.TargetKeyId == nil {
 		msg := "TargetKeyId is a required parameter"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "parameter", "TargetKeyId")
 		return NewMissingParameterResponse(msg)
 	}
 
 	if body.AliasName == nil {
 		msg := "AliasName is a required parameter"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "parameter", "AliasName")
 		return NewMissingParameterResponse(msg)
 	}
 
@@ -40,12 +40,12 @@ func (r *RequestHandler) UpdateAlias() Response {
 		msg := "Alias must start with the prefix \"alias/\". Please see " +
 			"http://docs.aws.amazon.com/kms/latest/developerguide/programming-aliases.html"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), msg)
 		return NewValidationExceptionResponse(msg)
 	}
 
 	if strings.HasPrefix(*body.AliasName, "alias/aws") {
-		r.logger.Warnf("Cannot create alias with prefix 'alias/aws/'")
+		r.logger.WarnContext(r.request.Context(), "Cannot create alias with aws/ prefix")
 		return NewNotAuthorizedExceptionResponse("")
 	}
 
@@ -53,7 +53,7 @@ func (r *RequestHandler) UpdateAlias() Response {
 		msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'AliasName' failed to satisfy "+
 			"constraint: Member must have length less than or equal to 256", *body.AliasName)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "aliasName", *body.AliasName)
 		return NewValidationExceptionResponse(msg)
 	}
 
@@ -66,7 +66,7 @@ func (r *RequestHandler) UpdateAlias() Response {
 	if err != nil {
 		msg := fmt.Sprintf("Alias '%s' does not exist", *body.AliasName)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "alias not found", "aliasName", *body.AliasName)
 		return NewNotFoundExceptionResponse(msg)
 	}
 
@@ -79,7 +79,7 @@ func (r *RequestHandler) UpdateAlias() Response {
 
 	if originalKey == nil {
 		msg := fmt.Sprintf("Original key '%s' does not exist", originalKeyArn)
-		r.logger.Errorf(msg)
+		r.logger.ErrorContext(r.request.Context(), "internal error", "error", msg)
 		return NewInternalFailureExceptionResponse(msg)
 	}
 
@@ -93,7 +93,7 @@ func (r *RequestHandler) UpdateAlias() Response {
 	if targetKey == nil {
 		msg := fmt.Sprintf("Key '%s' does not exist", targetKeyArn)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "key not found", "keyArn", targetKeyArn)
 		return NewNotFoundExceptionResponse(msg)
 	}
 
@@ -105,7 +105,7 @@ func (r *RequestHandler) UpdateAlias() Response {
 			"usage %s. The key usage of the current CMK and the new CMK must be the same.",
 			*body.AliasName, originalKey.GetMetadata().KeyUsage, targetKey.GetMetadata().KeyUsage)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "invalid key usage", "aliasName", *body.AliasName, "originalKeyUsage", originalKey.GetMetadata().KeyUsage, "targetKeyUsage", targetKey.GetMetadata().KeyUsage)
 		return NewValidationExceptionResponse(msg)
 	}
 
@@ -117,7 +117,7 @@ func (r *RequestHandler) UpdateAlias() Response {
 			"type %s. The key type of the current CMK and the new CMK must be the same.",
 			*body.AliasName, reflect.TypeOf(originalKey), reflect.TypeOf(targetKey))
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "aliasName", *body.AliasName, "originalKeyType", reflect.TypeOf(originalKey).String(), "targetKeyType", reflect.TypeOf(targetKey).String())
 		return NewValidationExceptionResponse(msg)
 	}
 
@@ -127,7 +127,7 @@ func (r *RequestHandler) UpdateAlias() Response {
 		// Key is pending deletion; cannot create alias
 		msg := fmt.Sprintf("%s is pending deletion.", targetKeyArn)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "key pending deletion", "keyArn", targetKeyArn)
 		return NewKMSInvalidStateExceptionResponse(msg)
 	}
 
@@ -137,13 +137,13 @@ func (r *RequestHandler) UpdateAlias() Response {
 	alias.LastUpdatedDate = float64(time.Now().Unix())
 
 	if err := r.database.SaveAlias(alias); err != nil {
-		r.logger.Error(err)
+		r.logger.ErrorContext(r.request.Context(), "internal error", "error", err)
 		return NewInternalFailureExceptionResponse(err.Error())
 	}
 
 	//---
 
-	r.logger.Infof("Alias updated: %s -> %s\n", alias.AliasArn, targetKey.GetArn())
+	r.logger.InfoContext(r.request.Context(), "Alias updated", "aliasArn", alias.AliasArn, "keyArn", targetKey.GetArn())
 
 	return NewResponse(200, nil)
 }

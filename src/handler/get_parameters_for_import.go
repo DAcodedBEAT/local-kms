@@ -24,7 +24,7 @@ func (r *RequestHandler) GetParametersForImport() Response {
 
 	var body *kms.GetParametersForImportInput
 	if err := r.decodeBodyInto(&body); err != nil {
-		r.logger.Errorf("Error decoding GetParametersForImportInput. Err %s\n", err.Error())
+		r.logger.ErrorContext(r.request.Context(), "Failed to decode request", "error", err)
 		body = &kms.GetParametersForImportInput{}
 	}
 
@@ -34,14 +34,14 @@ func (r *RequestHandler) GetParametersForImport() Response {
 	if body.KeyId == nil {
 		msg := "KeyId is a required parameter"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "parameter", "KeyId")
 		return NewMissingParameterResponse(msg)
 	}
 
 	if body.WrappingAlgorithm == "" {
 		msg := "WrappingAlgorithm is a required parameter"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "parameter", "WrappingAlgorithm")
 		return NewMissingParameterResponse(msg)
 	}
 
@@ -53,14 +53,14 @@ func (r *RequestHandler) GetParametersForImport() Response {
 	default:
 		msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'wrappingAlgorithm' failed to satisfy constraint: Member must satisfy enum value set: [RSAES_OAEP_SHA_1, RSAES_OAEP_SHA_256, RSAES_PKCS1_V1_5]", body.WrappingAlgorithm)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "wrappingAlgorithm", body.WrappingAlgorithm)
 		return NewValidationExceptionResponse(msg)
 	}
 
 	if body.WrappingKeySpec == "" {
 		msg := "WrappingKeySpec is a required parameter"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "parameter", "WrappingKeySpec")
 		return NewMissingParameterResponse(msg)
 	}
 
@@ -69,7 +69,7 @@ func (r *RequestHandler) GetParametersForImport() Response {
 	if body.WrappingKeySpec != "RSA_2048" {
 		msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'wrappingKeySpec' failed to satisfy constraint: Member must satisfy enum value set: [RSA_2048]", body.WrappingKeySpec)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "wrappingKeySpec", body.WrappingKeySpec)
 		return NewValidationExceptionResponse(msg)
 	}
 
@@ -83,7 +83,7 @@ func (r *RequestHandler) GetParametersForImport() Response {
 	if key == nil {
 		msg := fmt.Sprintf("Key '%s' does not exist", key.GetArn())
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "key not found", "keyArn", key.GetArn())
 		return NewNotFoundExceptionResponse(msg)
 	}
 
@@ -91,7 +91,7 @@ func (r *RequestHandler) GetParametersForImport() Response {
 	if keyMetadata.Origin != "EXTERNAL" {
 		msg := fmt.Sprintf("%s origin is %s which is not valid for this operation.", key.GetArn(), keyMetadata.Origin)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "unsupported operation", "keyArn", key.GetArn(), "origin", keyMetadata.Origin)
 		return NewUnsupportedOperationException(msg)
 	}
 
@@ -99,13 +99,13 @@ func (r *RequestHandler) GetParametersForImport() Response {
 	case cmk.KeyStatePendingDeletion:
 		msg := fmt.Sprintf("%s is pending deletion.", *body.KeyId)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "key pending deletion", "keyId", *body.KeyId)
 		return NewKMSInvalidStateExceptionResponse(msg)
 
 	case cmk.KeyStateUnavailable:
 		msg := fmt.Sprintf("%s is unavailable.", *body.KeyId)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "invalid key state", "keyId", *body.KeyId)
 		return NewKMSInvalidStateExceptionResponse(msg)
 	}
 
@@ -114,17 +114,15 @@ func (r *RequestHandler) GetParametersForImport() Response {
 	// Starting by generating a wrapping RSA key
 	rsaKey, err := rsa.GenerateKey(rand.Reader, bits)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to generate RSA key. Err: %s", err.Error())
-		r.logger.Error(msg)
-		return NewResponse(500, msg)
+		r.logger.ErrorContext(r.request.Context(), "failed to generate RSA key", "error", err)
+		return NewResponse(500, err.Error())
 	}
 
 	// public key
 	pubKeyBytes, err := x509.MarshalPKIXPublicKey(&rsaKey.PublicKey)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to get bytes for RSA public key. Err: %s", err.Error())
-		r.logger.Error(msg)
-		return NewResponse(500, msg)
+		r.logger.ErrorContext(r.request.Context(), "failed to marshal RSA public key", "error", err)
+		return NewResponse(500, err.Error())
 	}
 
 	// For import token we just generate a random base64 string that matches the length requirements that would be returned by AWS
@@ -143,11 +141,11 @@ func (r *RequestHandler) GetParametersForImport() Response {
 	// Save the key
 
 	if err := r.database.SaveKey(key); err != nil {
-		r.logger.Error(err)
+		r.logger.ErrorContext(r.request.Context(), "internal error", "error", err)
 		return NewInternalFailureExceptionResponse(err.Error())
 	}
 
-	r.logger.Infof("Parameters for key material import created for key %s", key.GetArn())
+	r.logger.InfoContext(r.request.Context(), "Key import parameters created", "keyArn", key.GetArn())
 
 	return NewResponse(200, &ParametersForImportResponse{
 		KeyId:             key.GetArn(),

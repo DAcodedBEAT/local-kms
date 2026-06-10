@@ -21,7 +21,7 @@ func (r *RequestHandler) GetKeyPolicy() Response {
 	if body.KeyId == nil {
 		msg := "KeyId is a required parameter"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "parameter", "KeyId")
 		return NewMissingParameterResponse(msg)
 	}
 
@@ -35,13 +35,13 @@ func (r *RequestHandler) GetKeyPolicy() Response {
 	if key == nil {
 		msg := fmt.Sprintf("Key '%s' does not exist", keyArn)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "key not found", "keyArn", keyArn)
 		return NewNotFoundExceptionResponse(msg)
 	}
 
 	//---
 
-	r.logger.Infof("Key policy returned: %s\n", key.GetArn())
+	r.logger.DebugContext(r.request.Context(), "Key policy returned", "keyArn", key.GetArn())
 
 	return NewResponse(200, map[string]string{
 		"Policy":     key.GetPolicy(),

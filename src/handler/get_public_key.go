@@ -21,13 +21,8 @@ func (r *RequestHandler) GetPublicKey() Response {
 	// Validation
 
 	if body.KeyId == nil {
-		msg := "1 validation error detected: Value null at 'keyId' failed to satisfy constraint: Member must not be null"
-
-		r.logger.Warnf(msg)
-		return NewValidationExceptionResponse(msg)
+		return r.nullValidationResponse("KeyId")
 	}
-
-	//---
 
 	key, response := r.getUsableKey(*body.KeyId)
 
@@ -45,6 +40,7 @@ func (r *RequestHandler) GetPublicKey() Response {
 
 		publicKey, err = x509.MarshalPKIXPublicKey(&k.PrivateKey.PublicKey)
 		if err != nil {
+			r.logger.ErrorContext(r.request.Context(), "failed to marshal RSA public key", "error", err)
 			return NewInternalFailureExceptionResponse(err.Error())
 		}
 
@@ -54,16 +50,17 @@ func (r *RequestHandler) GetPublicKey() Response {
 
 		publicKey, err = x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
 		if err != nil {
+			r.logger.ErrorContext(r.request.Context(), "failed to marshal EC public key", "error", err)
 			return NewInternalFailureExceptionResponse(err.Error())
 		}
 
 	default:
 		msg := fmt.Sprintf("Key '%s' does not support returning a public key", key.GetArn())
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "key does not support public key export", "keyArn", key.GetArn())
 		return NewInvalidKeyUsageException(msg)
 	}
 
-	//---
+	r.logger.DebugContext(r.request.Context(), "Public key returned", "keyArn", key.GetArn())
 
 	return NewResponse(200, &struct {
 		KeyId                 string

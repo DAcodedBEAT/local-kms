@@ -170,21 +170,30 @@ type ParametersForImport struct {
 
 type UnmarshalYAMLError struct {
 	message string
+	cause   error
 }
 
 func (e *UnmarshalYAMLError) Error() string {
 	return fmt.Sprintf("Error unmarshaling YAML: %s", e.message)
 }
 
+func (e *UnmarshalYAMLError) Unwrap() error {
+	return e.cause
+}
+
 func (m *KeyMetadata) IsPendingDeletion() bool {
 	return m.DeletionDate != 0 && m.DeletionDate < float64(time.Now().Unix())
 }
 
-func defaultSeededKeyMetadata(metadata *KeyMetadata) {
-	metadata.Arn = config.ArnPrefix() + "key/" + metadata.KeyId
-	metadata.AWSAccountId = config.AWSAccountId
-	metadata.CreationDate = float64(time.Now().UnixNano()) / 1e9
-	metadata.Enabled = true
-	metadata.KeyManager = "CUSTOMER"
-	metadata.KeyState = KeyStateEnabled
+func (m *KeyMetadata) Initialize(keyId string) {
+	m.KeyId = keyId
+	m.Arn = config.ArnPrefix() + "key/" + keyId
+	m.AWSAccountId = config.AWSAccountId
+	m.CreationDate = float64(time.Now().UnixNano()) / 1e9
+	m.Enabled = true
+	m.KeyManager = "CUSTOMER"
+	m.KeyState = KeyStateEnabled
+	if m.Origin == "" {
+		m.Origin = KeyOriginAwsKms
+	}
 }

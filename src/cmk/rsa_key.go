@@ -226,21 +226,21 @@ func (k *RsaKey) UnmarshalYAML(unmarshal func(any) error) error {
 
 	yk := YamlKey{}
 	if err := unmarshal(&yk); err != nil {
-		return &UnmarshalYAMLError{err.Error()}
+		return &UnmarshalYAMLError{message: err.Error(), cause: err}
 	}
 
 	k.Type = TypeRsa
 	k.Metadata = yk.Metadata
-	defaultSeededKeyMetadata(&k.Metadata)
+	k.Metadata.Initialize(k.Metadata.KeyId)
 
 	pemDecoded, _ := pem.Decode([]byte(yk.PrivateKeyPem))
 	if pemDecoded == nil {
-		return &UnmarshalYAMLError{fmt.Sprintf("Unable to decode pem of key %s check the YAML.\n", k.Metadata.KeyId)}
+		return &UnmarshalYAMLError{message: fmt.Sprintf("Unable to decode pem of key %s check the YAML.\n", k.Metadata.KeyId)}
 	}
 
 	parseResult, pkcsParseError := x509.ParsePKCS8PrivateKey(pemDecoded.Bytes)
 	if pkcsParseError != nil {
-		return &UnmarshalYAMLError{fmt.Sprintf("Unable to decode pem of key %s, Ensure it is in PKCS8 format with no password: %s.\n", k.Metadata.KeyId, pkcsParseError)}
+		return &UnmarshalYAMLError{message: fmt.Sprintf("Unable to decode pem of key %s, Ensure it is in PKCS8 format with no password: %s.\n", k.Metadata.KeyId, pkcsParseError), cause: pkcsParseError}
 	}
 
 	key := parseResult.(*rsa.PrivateKey)
@@ -254,10 +254,9 @@ func (k *RsaKey) UnmarshalYAML(unmarshal func(any) error) error {
 	case 4096:
 		k.Metadata.KeySpec = SpecRsa4096
 	default:
-		return &UnmarshalYAMLError{
-			fmt.Sprintf(
-				"RSA Keysize must be one of (2048,3072,4096) bits. %d bits found for key %s.\n",
-				bitLen, k.Metadata.KeyId),
+		return &UnmarshalYAMLError{message: fmt.Sprintf(
+			"RSA Keysize must be one of (2048,3072,4096) bits. %d bits found for key %s.\n",
+			bitLen, k.Metadata.KeyId),
 		}
 	}
 
@@ -281,9 +280,8 @@ func (k *RsaKey) UnmarshalYAML(unmarshal func(any) error) error {
 		}
 
 	default:
-		return &UnmarshalYAMLError{
-			fmt.Sprintf(
-				"KeyUsage must be one of (%s,%s). It is mandatory for RSA keys.\n", UsageEncryptDecrypt, UsageSignVerify),
+		return &UnmarshalYAMLError{message: fmt.Sprintf(
+			"KeyUsage must be one of (%s,%s). It is mandatory for RSA keys.\n", UsageEncryptDecrypt, UsageSignVerify),
 		}
 	}
 	return nil

@@ -276,20 +276,20 @@ func (k *EccKey) UnmarshalYAML(unmarshal func(any) error) error {
 
 	yk := YamlKey{}
 	if err := unmarshal(&yk); err != nil {
-		return &UnmarshalYAMLError{err.Error()}
+		return &UnmarshalYAMLError{message: err.Error(), cause: err}
 	}
 
 	k.Type = TypeEcc
 	k.Metadata = yk.Metadata
-	defaultSeededKeyMetadata(&k.Metadata)
+	k.Metadata.Initialize(k.Metadata.KeyId)
 	pemDecoded, _ := pem.Decode([]byte(yk.PrivateKeyPem))
 	if pemDecoded == nil {
-		return &UnmarshalYAMLError{fmt.Sprintf("Unable to decode pem of key %s check the YAML.\n", k.Metadata.KeyId)}
+		return &UnmarshalYAMLError{message: fmt.Sprintf("Unable to decode pem of key %s check the YAML.\n", k.Metadata.KeyId)}
 	}
 
 	parseResult, pkcsParseError := x509.ParseECPrivateKey(pemDecoded.Bytes)
 	if pkcsParseError != nil {
-		return &UnmarshalYAMLError{fmt.Sprintf("Unable to decode pem of key %s, Ensure it is in PKCS8 format with no password: %s.\n", k.Metadata.KeyId, pkcsParseError)}
+		return &UnmarshalYAMLError{message: fmt.Sprintf("Unable to decode pem of key %s, Ensure it is in PKCS8 format with no password: %s.\n", k.Metadata.KeyId, pkcsParseError), cause: pkcsParseError}
 	}
 
 	k.PrivateKey = EcdsaPrivateKey(*parseResult)
@@ -306,19 +306,17 @@ func (k *EccKey) UnmarshalYAML(unmarshal func(any) error) error {
 		k.Metadata.KeySpec = SpecEccNistP521
 		k.Metadata.SigningAlgorithms = []SigningAlgorithm{SigningAlgorithmEcdsaSha512}
 	default:
-		return &UnmarshalYAMLError{
-			fmt.Sprintf(
-				"EC Keysize must be one of (256,384,521) bits. %d bits found for key %s.\n",
-				bitLen, k.Metadata.KeyId),
+		return &UnmarshalYAMLError{message: fmt.Sprintf(
+			"EC Keysize must be one of (256,384,521) bits. %d bits found for key %s.\n",
+			bitLen, k.Metadata.KeyId),
 		}
 	}
 
 	k.Metadata.CustomerMasterKeySpec = k.Metadata.KeySpec
 
 	if k.Metadata.KeyUsage != UsageSignVerify {
-		return &UnmarshalYAMLError{
-			fmt.Sprintf(
-				"Only KeyUsage of (%s) supported for EC keys.\n", UsageSignVerify),
+		return &UnmarshalYAMLError{message: fmt.Sprintf(
+			"Only KeyUsage of (%s) supported for EC keys.\n", UsageSignVerify),
 		}
 	}
 	return nil

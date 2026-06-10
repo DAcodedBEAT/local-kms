@@ -7,11 +7,6 @@ import (
 )
 
 func (d *Database) SaveAlias(a *Alias) error {
-	// Check available disk space before writing
-	if err := CheckDiskSpace(d.dbPath); err != nil {
-		return err
-	}
-
 	// Validate the alias data before writing to prevent corruption
 	if err := ValidateAliasData(a); err != nil {
 		return err
@@ -22,7 +17,7 @@ func (d *Database) SaveAlias(a *Alias) error {
 		return err
 	}
 
-	return d.database.Put([]byte(a.AliasArn), encoded, syncWrite)
+	return d.put([]byte(a.AliasArn), encoded)
 }
 
 func (d *Database) LoadAlias(arn string) (*Alias, error) {

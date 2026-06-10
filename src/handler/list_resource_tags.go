@@ -39,14 +39,14 @@ func (r *RequestHandler) ListResourceTags() Response {
 		msg := fmt.Sprintf("1 validation error detected: Value '%d' at 'limit' failed to satisfy "+
 			"constraint: Minimum value of 1. Maximum value of 1000.", limit)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "limit", limit)
 		return NewValidationExceptionResponse(msg)
 	}
 
 	if body.KeyId == nil {
 		msg := "KeyId is a required parameter"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "parameter", "KeyId")
 		return NewMissingParameterResponse(msg)
 	}
 
@@ -56,7 +56,7 @@ func (r *RequestHandler) ListResourceTags() Response {
 
 	if key == nil {
 		msg := fmt.Sprintf("Key '%s' does not exist", keyId)
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "key not found", "keyId", keyId)
 
 		return NewNotFoundExceptionResponse(msg)
 	}
@@ -66,7 +66,7 @@ func (r *RequestHandler) ListResourceTags() Response {
 	// Load the tags for the key
 	tags, err := r.database.ListTags(key.GetArn(), limit+1, marker)
 	if err != nil {
-		r.logger.Error(err)
+		r.logger.ErrorContext(r.request.Context(), "internal error", "error", err)
 		return NewInternalFailureExceptionResponse(err.Error())
 	}
 
@@ -92,7 +92,7 @@ func (r *RequestHandler) ListResourceTags() Response {
 	}
 	response.Tags = tags
 
-	r.logger.Infof("%d tags listed for key %s\n", len(tags), key.GetMetadata().Arn)
+	r.logger.DebugContext(r.request.Context(), "Tags listed", "count", len(tags), "keyArn", key.GetMetadata().Arn)
 
 	return NewResponse(200, response)
 }

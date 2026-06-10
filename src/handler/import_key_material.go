@@ -29,7 +29,7 @@ type ImportKeyMaterialInput struct {
 func (r *RequestHandler) ImportKeyMaterial() Response {
 	var body *ImportKeyMaterialInput
 	if err := r.decodeBodyInto(&body); err != nil {
-		r.logger.Errorf("Error decoding ImportKeyMaterialInput. Err %s\n", err.Error())
+		r.logger.ErrorContext(r.request.Context(), "Failed to decode request", "error", err)
 		body = &ImportKeyMaterialInput{}
 	}
 
@@ -39,21 +39,21 @@ func (r *RequestHandler) ImportKeyMaterial() Response {
 	if body.KeyId == nil {
 		msg := "KeyId is a required parameter"
 
-		r.logger.Warn(msg)
+		r.logger.WarnContext(r.request.Context(), msg)
 		return NewMissingParameterResponse(msg)
 	}
 
 	if body.ImportToken == nil {
 		msg := "ImportToken is a required parameter"
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), msg)
 		return NewMissingParameterResponse(msg)
 	}
 
 	if body.EncryptedKeyMaterial == nil {
 		msg := "EncryptedKeyMaterial is a required parameter"
 
-		r.logger.Warn(msg)
+		r.logger.WarnContext(r.request.Context(), msg)
 		return NewMissingParameterResponse(msg)
 	}
 
@@ -70,20 +70,20 @@ func (r *RequestHandler) ImportKeyMaterial() Response {
 			expirationModel = cmk.ExpirationModel(*body.ExpirationModel)
 		default:
 			msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'expirationModel' failed to satisfy constraint: Member must satisfy enum value set: [KEY_MATERIAL_DOES_NOT_EXPIRE, KEY_MATERIAL_EXPIRES]", *body.ExpirationModel)
-			r.logger.Warnf(msg)
+			r.logger.WarnContext(r.request.Context(), "validation failed", "value", *body.ExpirationModel)
 			return NewValidationExceptionResponse(msg)
 		}
 	}
 
 	if expirationModel == cmk.ExpirationModelKeyMaterialExpires && body.ValidTo == nil {
 		msg := "A validTo date must be set if the ExpirationModel is KEY_MATERIAL_EXPIRES"
-		r.logger.Warn(msg)
+		r.logger.WarnContext(r.request.Context(), msg)
 		return NewValidationExceptionResponse(msg)
 	}
 
 	if expirationModel == cmk.ExpirationModelKeyMaterialDoesNotExpire && body.ValidTo != nil {
 		msg := "The parameter ValidTo cannot be specified for a key with an expiration model of KEY_MATERIAL_DOES_NOT_EXPIRE"
-		r.logger.Warn(msg)
+		r.logger.WarnContext(r.request.Context(), msg)
 		return NewValidationExceptionResponse(msg)
 	}
 
@@ -93,7 +93,7 @@ func (r *RequestHandler) ImportKeyMaterial() Response {
 	if body.ValidTo != nil && *body.ValidTo <= time.Now().Unix() {
 		msg := "ValidTo must be in the future"
 
-		r.logger.Warn(msg)
+		r.logger.WarnContext(r.request.Context(), "validation failed", "parameter", "ValidTo")
 		return NewValidationExceptionResponse(msg)
 	}
 
@@ -105,7 +105,7 @@ func (r *RequestHandler) ImportKeyMaterial() Response {
 	if key == nil {
 		msg := fmt.Sprintf("Key '%s' does not exist", key.GetArn())
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "key not found", "keyArn", key.GetArn())
 		return NewNotFoundExceptionResponse(msg)
 	}
 
@@ -113,7 +113,7 @@ func (r *RequestHandler) ImportKeyMaterial() Response {
 	if keyMetadata.Origin != cmk.KeyOriginExternal {
 		msg := fmt.Sprintf("%s origin is %s which is not valid for this operation.", key.GetArn(), keyMetadata.Origin)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "unsupported operation", "keyArn", key.GetArn(), "origin", keyMetadata.Origin)
 		return NewUnsupportedOperationException(msg)
 	}
 
@@ -121,27 +121,25 @@ func (r *RequestHandler) ImportKeyMaterial() Response {
 	case cmk.KeyStatePendingDeletion:
 		msg := fmt.Sprintf("%s is pending deletion.", *body.KeyId)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "key pending deletion", "keyId", *body.KeyId)
 		return NewKMSInvalidStateExceptionResponse(msg)
 
 	case cmk.KeyStateUnavailable:
 		msg := fmt.Sprintf("%s is unavailable.", *body.KeyId)
 
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "invalid key state", "keyId", *body.KeyId)
 		return NewKMSInvalidStateExceptionResponse(msg)
 	}
 
 	params := key.(*cmk.AesKey).GetParametersForImport()
 	if params == nil || !bytes.Equal(params.ImportToken, body.ImportToken) {
 
-		r.logger.Warnf("Invalid import token when when calling the ImportKeyMaterial operation for key %s.", key.GetArn())
+		r.logger.WarnContext(r.request.Context(), "Invalid import token", "keyArn", key.GetArn())
 		return NewInvalidImportTokenExceptionResponse()
 	}
 
 	if params.ParametersValidTo < time.Now().Unix() {
-		msg := fmt.Sprintf("Parameters for key material import have expired. Key '%s'", key.GetArn())
-
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "import token expired", "keyArn", key.GetArn())
 		return NewExpiredImportTokenExceptionResponse()
 	}
 
@@ -158,16 +156,12 @@ func (r *RequestHandler) ImportKeyMaterial() Response {
 
 	keyMaterial, err := params.PrivateKey.Decrypt(rand.Reader, body.EncryptedKeyMaterial, decrypterOps)
 	if err != nil {
-		msg := fmt.Sprintf("Unable to decode EncryptedKeyMaterial: %s", err.Error())
-
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "unable to decode EncryptedKeyMaterial", "error", err)
 		return NewInvalidCiphertextExceptionResponse("")
 	}
 
 	if err = key.(*cmk.AesKey).ImportKeyMaterial(keyMaterial); err != nil {
-		msg := fmt.Sprintf("Unable to import key material: %s", err.Error())
-
-		r.logger.Warnf(msg)
+		r.logger.WarnContext(r.request.Context(), "unable to import key material", "error", err)
 		return NewIncorrectKeyMaterialExceptionResponse()
 	}
 
@@ -185,11 +179,11 @@ func (r *RequestHandler) ImportKeyMaterial() Response {
 	// Save the key
 
 	if err = r.database.SaveKey(key); err != nil {
-		r.logger.Error(err)
+		r.logger.ErrorContext(r.request.Context(), "internal error", "error", err)
 		return NewInternalFailureExceptionResponse(err.Error())
 	}
 
-	r.logger.Infof("Imported key material for key %s", key.GetArn())
+	r.logger.InfoContext(r.request.Context(), "Key material imported", "keyArn", key.GetArn())
 
 	return NewResponse(200, &struct {
 		KeyId string

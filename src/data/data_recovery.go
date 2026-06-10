@@ -73,7 +73,7 @@ func (d *Database) ScanForCorruption() *CorruptionReport {
 
 // RemoveCorruptedEntry removes a single corrupted entry from the database.
 func (d *Database) RemoveCorruptedEntry(key string) error {
-	if err := d.database.Delete([]byte(key), syncWrite); err != nil {
+	if err := d.DeleteObject(key); err != nil {
 		return fmt.Errorf("failed to delete corrupted entry: %w", err)
 	}
 	return nil
