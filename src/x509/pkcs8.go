@@ -30,7 +30,7 @@ type pkcs8 struct {
 // and ed25519.PrivateKey. Unsupported key types result in an error.
 //
 // This kind of key is commonly encoded in PEM blocks of type "PRIVATE KEY".
-func MarshalPKCS8PrivateKey(key interface{}) ([]byte, error) {
+func MarshalPKCS8PrivateKey(key any) ([]byte, error) {
 	var privKey pkcs8
 
 	switch k := key.(type) {

@@ -3,7 +3,7 @@ package handler
 import (
 	"encoding/base64"
 	"fmt"
-	"github.com/aws/aws-sdk-go/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/cmk"
 	"github.com/nsmithuk/local-kms/src/service"
 )
@@ -44,9 +44,8 @@ func (r *RequestHandler) Decrypt() Response {
 		return NewValidationExceptionResponse(msg)
 	}
 
-	if body.EncryptionAlgorithm == nil {
-		d := "SYMMETRIC_DEFAULT"
-		body.EncryptionAlgorithm = &d
+	if body.EncryptionAlgorithm == "" {
+		body.EncryptionAlgorithm = "SYMMETRIC_DEFAULT"
 	}
 
 	//--------------------------------
@@ -58,7 +57,7 @@ func (r *RequestHandler) Decrypt() Response {
 
 	// We default of the full CiphertextBlob
 	// Replaced later in the case of AES payloads
-	var ciphertext []byte = body.CiphertextBlob
+	ciphertext := body.CiphertextBlob
 
 	if body.KeyId != nil {
 		key, response = r.getUsableKey(*body.KeyId)
@@ -90,6 +89,12 @@ func (r *RequestHandler) Decrypt() Response {
 		// We only use the unpacked keyArn if a key wasn't supplied.
 		if key == nil {
 			key, response = r.getUsableKey(keyArn)
+		} else if key.GetArn() != keyArn {
+			// Explicit KeyId was supplied but doesn't match the key embedded in the blob.
+			// AWS returns AccessDeniedException to avoid leaking key-existence metadata.
+			msg := "The ciphertext refers to a customer master key that does not exist, does not exist in this region, " +
+				"or you are not allowed to access."
+			return NewAccessDeniedExceptionResponse(msg)
 		}
 	}
 
@@ -120,7 +125,13 @@ func (r *RequestHandler) Decrypt() Response {
 
 	case *cmk.RsaKey:
 
-		plaintext, err = k.Decrypt(ciphertext, cmk.EncryptionAlgorithm(*body.EncryptionAlgorithm))
+		if k.GetMetadata().KeyUsage != cmk.UsageEncryptDecrypt {
+			msg := fmt.Sprintf("%s key usage is %s which is not valid for Decrypt.", k.GetArn(), k.GetMetadata().KeyUsage)
+			r.logger.Warnf(msg)
+			return NewInvalidKeyUsageException(msg)
+		}
+
+		plaintext, err = k.Decrypt(ciphertext, cmk.EncryptionAlgorithm(body.EncryptionAlgorithm))
 		if err != nil {
 			msg := fmt.Sprintf("Unable to decode Ciphertext: %s", err)
 			r.logger.Warnf(msg)
@@ -143,6 +154,6 @@ func (r *RequestHandler) Decrypt() Response {
 	}{
 		KeyId:               key.GetArn(),
 		Plaintext:           plaintext,
-		EncryptionAlgorithm: cmk.EncryptionAlgorithm(*body.EncryptionAlgorithm),
+		EncryptionAlgorithm: cmk.EncryptionAlgorithm(body.EncryptionAlgorithm),
 	})
 }

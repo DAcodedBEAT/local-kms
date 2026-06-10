@@ -58,20 +58,31 @@ func (r *RequestHandler) ImportKeyMaterial() Response {
 	}
 
 	var expirationModel cmk.ExpirationModel
-	switch *body.ExpirationModel {
-	case "KEY_MATERIAL_EXPIRES", "KEY_MATERIAL_DOES_NOT_EXPIRE":
-		expirationModel = cmk.ExpirationModel(*body.ExpirationModel)
-
-	default:
-		msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'expirationModel' failed to satisfy constraint: Member must satisfy enum value set: [KEY_MATERIAL_DOES_NOT_EXPIRE, KEY_MATERIAL_EXPIRES]", *body.ExpirationModel)
-
-		r.logger.Warnf(msg)
-		return NewValidationExceptionResponse(msg)
+	if body.ExpirationModel == nil {
+		if body.ValidTo != nil {
+			expirationModel = cmk.ExpirationModelKeyMaterialExpires
+		} else {
+			expirationModel = cmk.ExpirationModelKeyMaterialDoesNotExpire
+		}
+	} else {
+		switch *body.ExpirationModel {
+		case "KEY_MATERIAL_EXPIRES", "KEY_MATERIAL_DOES_NOT_EXPIRE":
+			expirationModel = cmk.ExpirationModel(*body.ExpirationModel)
+		default:
+			msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'expirationModel' failed to satisfy constraint: Member must satisfy enum value set: [KEY_MATERIAL_DOES_NOT_EXPIRE, KEY_MATERIAL_EXPIRES]", *body.ExpirationModel)
+			r.logger.Warnf(msg)
+			return NewValidationExceptionResponse(msg)
+		}
 	}
 
 	if expirationModel == cmk.ExpirationModelKeyMaterialExpires && body.ValidTo == nil {
 		msg := "A validTo date must be set if the ExpirationModel is KEY_MATERIAL_EXPIRES"
+		r.logger.Warn(msg)
+		return NewValidationExceptionResponse(msg)
+	}
 
+	if expirationModel == cmk.ExpirationModelKeyMaterialDoesNotExpire && body.ValidTo != nil {
+		msg := "The parameter ValidTo cannot be specified for a key with an expiration model of KEY_MATERIAL_DOES_NOT_EXPIRE"
 		r.logger.Warn(msg)
 		return NewValidationExceptionResponse(msg)
 	}
@@ -165,7 +176,7 @@ func (r *RequestHandler) ImportKeyMaterial() Response {
 	keyMetadata.Enabled = true
 
 	if expirationModel == cmk.ExpirationModelKeyMaterialExpires {
-		keyMetadata.ValidTo = *body.ValidTo
+		keyMetadata.ValidTo = float64(*body.ValidTo)
 	} else {
 		keyMetadata.ValidTo = 0
 	}
@@ -180,5 +191,9 @@ func (r *RequestHandler) ImportKeyMaterial() Response {
 
 	r.logger.Infof("Imported key material for key %s", key.GetArn())
 
-	return NewResponse(200, nil)
+	return NewResponse(200, &struct {
+		KeyId string
+	}{
+		KeyId: key.GetArn(),
+	})
 }

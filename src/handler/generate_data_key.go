@@ -2,7 +2,7 @@ package handler
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/cmk"
 	"github.com/nsmithuk/local-kms/src/service"
 )
@@ -54,14 +54,14 @@ func (r *RequestHandler) generateDataKey() (Response, *GenerateDataKeyResponse) 
 		return NewMissingParameterResponse(msg), nil
 	}
 
-	if body.NumberOfBytes == nil && body.KeySpec == nil {
+	if body.NumberOfBytes == nil && body.KeySpec == "" {
 		msg := "1 validation error detected: Either KeySpec or NumberOfBytes is required."
 
 		r.logger.Warnf(msg)
 		return NewValidationExceptionResponse(msg), nil
 	}
 
-	if body.NumberOfBytes != nil && body.KeySpec != nil {
+	if body.NumberOfBytes != nil && body.KeySpec != "" {
 		msg := "1 validation error detected: Both KeySpec and NumberOfBytes cannot be provided."
 
 		r.logger.Warnf(msg)
@@ -76,8 +76,8 @@ func (r *RequestHandler) generateDataKey() (Response, *GenerateDataKeyResponse) 
 		return NewValidationExceptionResponse(msg), nil
 	}
 
-	if body.KeySpec != nil {
-		switch *body.KeySpec {
+	if body.KeySpec != "" {
+		switch body.KeySpec {
 		case "AES_128":
 			bytesRequired = 128 / 8
 
@@ -86,7 +86,7 @@ func (r *RequestHandler) generateDataKey() (Response, *GenerateDataKeyResponse) 
 
 		default:
 			msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'KeySpec' failed to satisfy "+
-				"constraint: Member must be AES_128 or AES_256", *body.KeySpec)
+				"constraint: Member must be AES_128 or AES_256", body.KeySpec)
 
 			r.logger.Warnf(msg)
 			return NewValidationExceptionResponse(msg), nil
@@ -129,7 +129,9 @@ func (r *RequestHandler) generateDataKey() (Response, *GenerateDataKeyResponse) 
 			return NewInvalidKeyUsageException(msg), nil
 		}
 
-		return NewInternalFailureExceptionResponse("key type not yet supported for encryption"), nil
+		msg := fmt.Sprintf("%s key KeySpec is %s which is not valid for GenerateDataKey.", k.GetArn(), k.GetMetadata().CustomerMasterKeySpec)
+		r.logger.Warnf(msg)
+		return NewInvalidKeyUsageException(msg), nil
 	}
 
 	return Response{}, &GenerateDataKeyResponse{

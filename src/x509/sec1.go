@@ -26,7 +26,7 @@ type ecPrivateKey struct {
 // marshalECPrivateKey marshals an EC private key into ASN.1, DER format and
 // sets the curve ID to the given OID, or omits it if OID is nil.
 func marshalECPrivateKeyWithOID(key *ecdsa.PrivateKey, oid asn1.ObjectIdentifier) ([]byte, error) {
-	privateKey := make([]byte, (key.Curve.Params().N.BitLen()+7)/8)
+	privateKey := make([]byte, (key.Params().N.BitLen()+7)/8)
 	return asn1.Marshal(ecPrivateKey{
 		Version:       1,
 		PrivateKey:    key.D.FillBytes(privateKey),

@@ -3,7 +3,7 @@ package handler
 import (
 	"fmt"
 
-	"github.com/aws/aws-sdk-go/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/cmk"
 	"github.com/nsmithuk/local-kms/src/config"
 )
@@ -43,8 +43,7 @@ func (r *RequestHandler) CancelKeyDeletion() Response {
 
 	//---
 
-	if key.GetMetadata().DeletionDate == 0 {
-		// Key is pending deletion; cannot re-schedule
+	if key.GetMetadata().KeyState != cmk.KeyStatePendingDeletion {
 		msg := fmt.Sprintf("%s is not pending deletion.", target)
 
 		r.logger.Warnf(msg)
@@ -53,8 +52,8 @@ func (r *RequestHandler) CancelKeyDeletion() Response {
 
 	//---
 
-	key.GetMetadata().Enabled = true
-	key.GetMetadata().KeyState = cmk.KeyStateEnabled
+	key.GetMetadata().Enabled = false
+	key.GetMetadata().KeyState = cmk.KeyStateDisabled
 	key.GetMetadata().DeletionDate = 0
 
 	//--------------------------------
@@ -70,7 +69,7 @@ func (r *RequestHandler) CancelKeyDeletion() Response {
 
 	r.logger.Infof("Key deletion canceled: %s\n", key.GetArn())
 
-	return NewResponse(200, map[string]interface{}{
+	return NewResponse(200, map[string]any{
 		"KeyId": key.GetArn(),
 	})
 }

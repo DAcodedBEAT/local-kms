@@ -8,7 +8,7 @@ func (r *RequestHandler) GenerateDataKeyWithoutPlaintext() Response {
 	}
 
 	// Strip out the Plaintext
-	keyResponse.Plaintext = []byte{}
+	keyResponse.Plaintext = nil
 
 	//---
 

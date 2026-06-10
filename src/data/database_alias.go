@@ -2,19 +2,31 @@ package data
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 func (d *Database) SaveAlias(a *Alias) error {
+	// Check available disk space before writing
+	if err := CheckDiskSpace(d.dbPath); err != nil {
+		return err
+	}
+
+	// Validate the alias data before writing to prevent corruption
+	if err := ValidateAliasData(a); err != nil {
+		return err
+	}
+
 	encoded, err := json.Marshal(a)
 	if err != nil {
 		return err
 	}
 
-	return d.database.Put([]byte(a.AliasArn), encoded, nil)
+	return d.database.Put([]byte(a.AliasArn), encoded, syncWrite)
 }
 
 func (d *Database) LoadAlias(arn string) (*Alias, error) {
+	var a Alias
 
 	encoded, err := d.database.Get([]byte(arn), nil)
 
@@ -24,10 +36,12 @@ func (d *Database) LoadAlias(arn string) (*Alias, error) {
 
 	//---
 
-	var a Alias
-	err = json.Unmarshal(encoded, &a)
+	if err := json.Unmarshal(encoded, &a); err != nil {
+		// Return detailed error for corruption detection
+		return nil, fmt.Errorf("failed to unmarshal alias at %s, possible data corruption: %w", arn, err)
+	}
 
-	return &a, err
+	return &a, nil
 }
 
 func (d *Database) ListAlias(prefix string, limit int64, marker, key string) (aliases []*Alias, err error) {
@@ -49,8 +63,8 @@ func (d *Database) ListAlias(prefix string, limit int64, marker, key string) (al
 
 		var a Alias
 
-		err = json.Unmarshal(iter.Value(), &a)
-		if err != nil {
+		if err = json.Unmarshal(iter.Value(), &a); err != nil {
+			err = fmt.Errorf("failed to unmarshal alias at %s, possible data corruption: %w", string(iter.Key()), err)
 			return
 		}
 

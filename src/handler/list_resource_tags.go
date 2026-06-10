@@ -2,7 +2,7 @@ package handler
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/config"
 	"github.com/nsmithuk/local-kms/src/data"
 )
@@ -29,15 +29,15 @@ func (r *RequestHandler) ListResourceTags() Response {
 		marker = *body.Marker
 	}
 	if body.Limit != nil {
-		limit = *body.Limit
+		limit = int64(*body.Limit)
 	}
 
 	//--------------------------------
 	// Validation
 
-	if limit < 1 || limit > 50 {
+	if limit < 1 || limit > 1000 {
 		msg := fmt.Sprintf("1 validation error detected: Value '%d' at 'limit' failed to satisfy "+
-			"constraint: Minimum value of 1. Maximum value of 50.", limit)
+			"constraint: Minimum value of 1. Maximum value of 1000.", limit)
 
 		r.logger.Warnf(msg)
 		return NewValidationExceptionResponse(msg)
@@ -65,6 +65,10 @@ func (r *RequestHandler) ListResourceTags() Response {
 
 	// Load the tags for the key
 	tags, err := r.database.ListTags(key.GetArn(), limit+1, marker)
+	if err != nil {
+		r.logger.Error(err)
+		return NewInternalFailureExceptionResponse(err.Error())
+	}
 
 	//---
 
@@ -83,6 +87,9 @@ func (r *RequestHandler) ListResourceTags() Response {
 		tags = tags[:limit]
 	}
 
+	if tags == nil {
+		tags = make([]*data.Tag, 0)
+	}
 	response.Tags = tags
 
 	r.logger.Infof("%d tags listed for key %s\n", len(tags), key.GetMetadata().Arn)

@@ -2,7 +2,7 @@ package handler
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/config"
 )
 
@@ -25,7 +25,12 @@ func (r *RequestHandler) UpdateKeyDescription() Response {
 		return NewMissingParameterResponse(msg)
 	}
 
-	if body.Description != nil && len(*body.Description) > 8192 {
+	if body.Description == nil {
+		d := ""
+		body.Description = &d
+	}
+
+	if len(*body.Description) > 8192 {
 		msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'description' failed to satisfy "+
 			"constraint: Member must have length less than or equal to 8192", *body.Description)
 
@@ -57,7 +62,7 @@ func (r *RequestHandler) UpdateKeyDescription() Response {
 		return NewKMSInvalidStateExceptionResponse(msg)
 	}
 
-	key.GetMetadata().Description = body.Description
+	key.GetMetadata().Description = *body.Description
 
 	//--------------------------------
 	// Save the key

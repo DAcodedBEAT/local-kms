@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aws/aws-sdk-go/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
+	kmstypes "github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/gofrs/uuid"
 	"github.com/nsmithuk/local-kms/src/cmk"
 	"github.com/nsmithuk/local-kms/src/config"
@@ -28,7 +29,7 @@ func (r *RequestHandler) CreateKey() Response {
 		Arn:          config.ArnPrefix() + "key/" + keyId,
 		KeyId:        keyId,
 		AWSAccountId: config.AWSAccountId,
-		CreationDate: time.Now().Unix(),
+		CreationDate: float64(time.Now().UnixNano()) / 1e9,
 		Enabled:      true,
 		KeyManager:   "CUSTOMER",
 		KeyState:     cmk.KeyStateEnabled,
@@ -60,7 +61,7 @@ func (r *RequestHandler) CreateKey() Response {
 	}
 
 	if body.Description != nil {
-		metadata.Description = body.Description
+		metadata.Description = *body.Description
 	}
 
 	if body.Policy == nil {
@@ -80,49 +81,48 @@ func (r *RequestHandler) CreateKey() Response {
 		body.Policy = &policy
 	}
 
-	if body.KeySpec != nil && body.CustomerMasterKeySpec != nil {
+	if body.KeySpec != "" && body.CustomerMasterKeySpec != "" {
 		// Both values cannot be set
 
-		msg := fmt.Sprintf("You cannot specify KeySpec and CustomerMasterKeySpec in the same request. CustomerMasterKeySpec is deprecated.")
+		msg := "You cannot specify KeySpec and CustomerMasterKeySpec in the same request. CustomerMasterKeySpec is deprecated."
 		r.logger.Warnf(msg)
 		return NewValidationExceptionResponse(msg)
-	} else if body.KeySpec == nil && body.CustomerMasterKeySpec != nil {
+	} else if body.KeySpec == "" && body.CustomerMasterKeySpec != "" {
 		// If we only have CustomerMasterKeySpec, copy it over to KeySpec
-		body.KeySpec = body.CustomerMasterKeySpec
+		body.KeySpec = kmstypes.KeySpec(body.CustomerMasterKeySpec)
 
-	} else if body.KeySpec == nil && body.CustomerMasterKeySpec == nil {
-		// If neither are set, the default is SYMMETRIC_DEFAULT
-		sd := "SYMMETRIC_DEFAULT"
-		body.KeySpec = &sd
+	} else if body.KeySpec == "" {
+		// Neither set; default is SYMMETRIC_DEFAULT
+		body.KeySpec = kmstypes.KeySpec(cmk.SpecSymmetricDefault)
 	}
 
-	if body.Origin != nil {
-		switch *body.Origin {
-		case "AWS_KMS":
+	if body.Origin != "" {
+		switch cmk.KeyOrigin(body.Origin) {
+		case cmk.KeyOriginAwsKms:
 			// nop
-		case "EXTERNAL":
+		case cmk.KeyOriginExternal:
 
-			if *body.KeySpec != "SYMMETRIC_DEFAULT" {
-				msg := fmt.Sprintf("KeySpec %s is not supported for Origin %s", *body.KeySpec, *body.Origin)
+			if cmk.KeySpec(body.KeySpec) != cmk.SpecSymmetricDefault {
+				msg := fmt.Sprintf("KeySpec %s is not supported for Origin %s", body.KeySpec, body.Origin)
 
 				r.logger.Warnf(msg)
 				return NewValidationExceptionResponse(msg)
 			}
 
-			r.logger.Infof("Set key origin to %s and state to PendingImport", *body.Origin)
-			metadata.Origin = cmk.KeyOrigin(*body.Origin)
+			r.logger.Infof("Set key origin to %s and state to PendingImport", body.Origin)
+			metadata.Origin = cmk.KeyOriginExternal
 			metadata.Enabled = false
 			metadata.KeyState = cmk.KeyStatePendingImport
 
-		case "AWS_CLOUDHSM":
+		case cmk.KeyOriginAwsCloudHsm:
 
-			msg := fmt.Sprintf("Local KMS does not yet support Origin AWS_CLOUDHSM.")
+			msg := "Local KMS does not yet support Origin AWS_CLOUDHSM."
 			r.logger.Warnf(msg)
 			return NewUnsupportedOperationException(msg)
 
 		default:
 
-			msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'origin' failed to satisfy constraint: Member must satisfy enum value set: [EXTERNAL, AWS_CLOUDHSM, AWS_KMS]", *body.Origin)
+			msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'origin' failed to satisfy constraint: Member must satisfy enum value set: [EXTERNAL, AWS_CLOUDHSM, AWS_KMS]", body.Origin)
 
 			r.logger.Warnf(msg)
 			return NewValidationExceptionResponse(msg)
@@ -133,52 +133,53 @@ func (r *RequestHandler) CreateKey() Response {
 
 	var key cmk.Key
 
-	switch *body.KeySpec {
-	case "SYMMETRIC_DEFAULT":
+	switch cmk.KeySpec(body.KeySpec) {
+	case cmk.SpecSymmetricDefault:
 
-		if body.KeyUsage != nil && *body.KeyUsage != "ENCRYPT_DECRYPT" {
-			msg := fmt.Sprintf("The operation failed because the KeyUsage value of the CMK is %s. To perform this operation, the KeyUsage value must be ENCRYPT_DECRYPT.", *body.KeyUsage)
+		if body.KeyUsage != "" && cmk.KeyUsage(body.KeyUsage) != cmk.UsageEncryptDecrypt {
+			msg := fmt.Sprintf("The operation failed because the KeyUsage value of the CMK is %s. To perform this operation, the KeyUsage value must be ENCRYPT_DECRYPT.", body.KeyUsage)
 			r.logger.Warnf(msg)
 			return NewValidationExceptionResponse(msg)
 		}
 
 		key = cmk.NewAesKey(metadata, *body.Policy, metadata.Origin)
 
-	case "ECC_NIST_P256", "ECC_NIST_P384", "ECC_NIST_P521", "ECC_SECG_P256K1":
+	case cmk.SpecEccNistP256, cmk.SpecEccNistP384, cmk.SpecEccNistP521, cmk.SpecEccSecp256k1:
 
-		if body.KeyUsage == nil {
-			msg := fmt.Sprintf("You must specify a KeyUsage value for an asymmetric CMK.")
+		if body.KeyUsage == "" {
+			msg := "You must specify a KeyUsage value for an asymmetric CMK."
 			r.logger.Warnf(msg)
 			return NewValidationExceptionResponse(msg)
 		}
 
-		if *body.KeyUsage != "SIGN_VERIFY" {
-			msg := fmt.Sprintf("KeyUsage ENCRYPT_DECRYPT is not compatible with KeySpec %s", *body.KeySpec)
+		if cmk.KeyUsage(body.KeyUsage) != cmk.UsageSignVerify {
+			msg := fmt.Sprintf("KeyUsage ENCRYPT_DECRYPT is not compatible with KeySpec %s", body.KeySpec)
 			r.logger.Warnf(msg)
 			return NewValidationExceptionResponse(msg)
 		}
 
-		key, err = cmk.NewEccKey(cmk.KeySpec(*body.KeySpec), metadata, *body.Policy)
+		key, err = cmk.NewEccKey(cmk.KeySpec(body.KeySpec), metadata, *body.Policy)
 		if err != nil {
 			r.logger.Error(err)
 			return NewInternalFailureExceptionResponse(err.Error())
 		}
 
-	case "RSA_2048", "RSA_3072", "RSA_4096":
+	case cmk.SpecRsa2048, cmk.SpecRsa3072, cmk.SpecRsa4096:
 
-		if body.KeyUsage == nil {
-			msg := fmt.Sprintf("You must specify a KeyUsage value for an asymmetric CMK.")
+		if body.KeyUsage == "" {
+			msg := "You must specify a KeyUsage value for an asymmetric CMK."
 			r.logger.Warnf(msg)
 			return NewValidationExceptionResponse(msg)
 		}
 
-		if !(*body.KeyUsage == "SIGN_VERIFY" || *body.KeyUsage == "ENCRYPT_DECRYPT") {
-			msg := fmt.Sprintf("KeyUsage %s is not compatible with KeySpec %s", *body.KeyUsage, *body.KeySpec)
+		usage := cmk.KeyUsage(body.KeyUsage)
+		if usage != cmk.UsageSignVerify && usage != cmk.UsageEncryptDecrypt {
+			msg := fmt.Sprintf("KeyUsage %s is not compatible with KeySpec %s", body.KeyUsage, body.KeySpec)
 			r.logger.Warnf(msg)
 			return NewValidationExceptionResponse(msg)
 		}
 
-		key, err = cmk.NewRsaKey(cmk.KeySpec(*body.KeySpec), cmk.KeyUsage(*body.KeyUsage), metadata, *body.Policy)
+		key, err = cmk.NewRsaKey(cmk.KeySpec(body.KeySpec), cmk.KeyUsage(body.KeyUsage), metadata, *body.Policy)
 		if err != nil {
 			r.logger.Error(err)
 			return NewInternalFailureExceptionResponse(err.Error())
@@ -188,7 +189,7 @@ func (r *RequestHandler) CreateKey() Response {
 
 		msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'KeySpec' "+
 			"failed to satisfy constraint: Member must satisfy enum value set: [RSA_2048, ECC_NIST_P384, "+
-			"ECC_NIST_P256, ECC_NIST_P521, RSA_3072, ECC_SECG_P256K1, RSA_4096, SYMMETRIC_DEFAULT]", *body.KeySpec)
+			"ECC_NIST_P256, ECC_NIST_P521, RSA_3072, ECC_SECG_P256K1, RSA_4096, SYMMETRIC_DEFAULT]", body.KeySpec)
 
 		r.logger.Warnf(msg)
 
@@ -209,13 +210,16 @@ func (r *RequestHandler) CreateKey() Response {
 	//--------------------------------
 	// Create the tags
 
-	if body.Tags != nil && len(body.Tags) > 0 {
+	if len(body.Tags) > 0 {
 		for _, kv := range body.Tags {
 			t := &data.Tag{
 				TagKey:   *kv.TagKey,
 				TagValue: *kv.TagValue,
 			}
-			_ = r.database.SaveTag(key, t)
+			if err := r.database.SaveTag(key, t); err != nil {
+				r.logger.Error(err)
+				return NewInternalFailureExceptionResponse(err.Error())
+			}
 
 			r.logger.Infof("New tag created: %s / %s\n", t.TagKey, t.TagValue)
 		}

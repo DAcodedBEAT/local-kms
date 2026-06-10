@@ -1,36 +1,17 @@
 import re
 
 
-def validate_error_response(response, error_type, error_message_expression):
-    """
-    Validates that an error response from KMS is as expected.
-    """
-
-    if not isinstance(response, dict):
-        print("Response is not a dictionary")
-        return False
-
-    if '__type' not in response:
-        print("'__type' key is missing")
-        return False
-
-    if 'message' not in response:
-        print("'message' key is missing")
-        return False
-
-    if error_type != response['__type']:
-        print(
-            "The return type '%s' does not match the expected type '%s'"
-            % (response['__type'], error_type)
+def assert_error_response(response, error_type, error_message_expression=None):
+    assert isinstance(response, dict), (
+        f"Expected dict response, got {type(response).__name__}: {response!r}"
+    )
+    assert '__type' in response, f"Missing '__type' in error response: {response}"
+    assert 'message' in response, f"Missing 'message' in error response: {response}"
+    assert response['__type'] == error_type, (
+        f"Expected error type '{error_type}', got '{response['__type']}'"
+    )
+    if error_message_expression is not None:
+        pattern = re.compile(error_message_expression)
+        assert pattern.match(response['message']), (
+            f"Message '{response['message']}' did not match pattern '{error_message_expression}'"
         )
-        return False
-
-    pattern = re.compile(error_message_expression)
-    if not pattern.match(response['message']):
-        print(
-            "The return message\n\t'%s'\ndoes not match the expected message pattern\n\t'%s'"
-            % (response['message'], error_message_expression)
-        )
-        return False
-
-    return True

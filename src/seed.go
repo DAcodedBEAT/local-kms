@@ -85,29 +85,17 @@ func seed(path string, database *data.Database) {
 				"Support for the legacy version will be removed in future versions.\n")
 		}
 
-		for _, key := range seed.Keys {
-			aesKeys = append(aesKeys, key)
-		}
+		aesKeys = append(aesKeys, seed.Keys...)
 
-		for _, alias := range seed.Aliases {
-			aliases = append(aliases, alias)
-		}
+		aliases = append(aliases, seed.Aliases...)
 
 		//------------------------------------------------------
 
 	} else {
-		for _, key := range seed.Keys.Symmetric.Aes {
-			aesKeys = append(aesKeys, key)
-		}
-		for _, key := range seed.Keys.Asymmetric.Rsa {
-			rsaKeys = append(rsaKeys, key)
-		}
-		for _, key := range seed.Keys.Asymmetric.Ecc {
-			eccKeys = append(eccKeys, key)
-		}
-		for _, alias := range seed.Aliases {
-			aliases = append(aliases, alias)
-		}
+		aesKeys = append(aesKeys, seed.Keys.Symmetric.Aes...)
+		rsaKeys = append(rsaKeys, seed.Keys.Asymmetric.Rsa...)
+		eccKeys = append(eccKeys, seed.Keys.Asymmetric.Ecc...)
+		aliases = append(aliases, seed.Aliases...)
 	}
 
 	logger.Infof("Importing data from seed file %s\n", path)
@@ -122,19 +110,28 @@ func seed(path string, database *data.Database) {
 	keysAdded := 0
 	for _, key := range aesKeys {
 		if keyIsNew(database, &key.Metadata) {
-			database.SaveKey(&key)
+			if err := database.SaveKey(&key); err != nil {
+				logger.Warnf("Failed to save key %s: %v", key.GetMetadata().KeyId, err)
+				continue
+			}
 			keysAdded++
 		}
 	}
 	for _, key := range rsaKeys {
 		if keyIsNew(database, &key.Metadata) {
-			database.SaveKey(&key)
+			if err := database.SaveKey(&key); err != nil {
+				logger.Warnf("Failed to save key %s: %v", key.GetMetadata().KeyId, err)
+				continue
+			}
 			keysAdded++
 		}
 	}
 	for _, key := range eccKeys {
 		if keyIsNew(database, &key.Metadata) {
-			database.SaveKey(&key)
+			if err := database.SaveKey(&key); err != nil {
+				logger.Warnf("Failed to save key %s: %v", key.GetMetadata().KeyId, err)
+				continue
+			}
 			keysAdded++
 		}
 	}
@@ -147,7 +144,10 @@ func seed(path string, database *data.Database) {
 			continue
 		}
 
-		database.SaveAlias(&alias)
+		if err := database.SaveAlias(&alias); err != nil {
+			logger.Warnf("Failed to save alias %s: %v", alias.AliasName, err)
+			continue
+		}
 		aliasesAdded++
 	}
 

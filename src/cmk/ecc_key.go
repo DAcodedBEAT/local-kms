@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"math/big"
+	"slices"
 )
 
 // We create our own type to manage JSON Marshaling
@@ -105,14 +106,7 @@ func (k *EccKey) Sign(digest []byte, algorithm SigningAlgorithm) ([]byte, error)
 	//--------------------------
 	// Check the requested Signing Algorithm is supported by this key
 
-	validSigningAlgorithm := false
-
-	for _, a := range k.Metadata.SigningAlgorithms {
-		if a == algorithm {
-			validSigningAlgorithm = true
-			break
-		}
-	}
+	validSigningAlgorithm := slices.Contains(k.Metadata.SigningAlgorithms, algorithm)
 
 	if !validSigningAlgorithm {
 		return []byte{}, &InvalidSigningAlgorithm{}
@@ -271,7 +265,7 @@ func (k *EcdsaPrivateKey) UnmarshalJSON(data []byte) error {
 // ----------------------------------------------------
 // Construct key from YAML (seeding)
 // ---
-func (k *EccKey) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (k *EccKey) UnmarshalYAML(unmarshal func(any) error) error {
 
 	// Cannot use embedded 'Key' struct
 	// https://github.com/go-yaml/yaml/issues/263

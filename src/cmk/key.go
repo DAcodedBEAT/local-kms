@@ -113,6 +113,7 @@ const (
 type Key interface {
 	GetArn() string
 	GetPolicy() string
+	SetPolicy(policy string)
 	GetKeyType() KeyType
 	GetMetadata() *KeyMetadata
 }
@@ -133,23 +134,29 @@ type BaseKey struct {
 	Policy   string
 }
 
+func (k *BaseKey) SetPolicy(policy string) {
+	k.Policy = policy
+}
+
 type KeyMetadata struct {
 	AWSAccountId    string          `json:",omitempty"`
 	Arn             string          `json:",omitempty"`
-	CreationDate    int64           `json:",omitempty"`
-	DeletionDate    int64           `json:",omitempty"`
-	Description     *string         `yaml:"Description"`
+	CreationDate    float64         `json:",omitempty"`
+	DeletionDate    float64         `json:",omitempty"`
+	Description     string          `yaml:"Description"`
 	Enabled         bool            `yaml:"Enabled"`
 	ExpirationModel ExpirationModel `json:",omitempty"`
 	KeyId           string          `json:",omitempty" yaml:"KeyId"`
 	KeyManager      string          `json:",omitempty"`
 	KeyState        KeyState        `json:",omitempty"`
 	KeyUsage        KeyUsage        `json:",omitempty" yaml:"KeyUsage"`
+	MultiRegion     bool            `json:"MultiRegion" yaml:"-"`
 	Origin          KeyOrigin       `json:",omitempty" yaml:"Origin"`
-	ValidTo         int64           `json:",omitempty"`
+	ValidTo         float64         `json:",omitempty"`
 
 	SigningAlgorithms     []SigningAlgorithm    `json:",omitempty"`
 	EncryptionAlgorithms  []EncryptionAlgorithm `json:",omitempty"`
+	MacAlgorithms         []string              `json:",omitempty"`
 	KeySpec               KeySpec               `json:",omitempty"`
 	CustomerMasterKeySpec KeySpec               `json:",omitempty"`
 }
@@ -169,10 +176,14 @@ func (e *UnmarshalYAMLError) Error() string {
 	return fmt.Sprintf("Error unmarshaling YAML: %s", e.message)
 }
 
+func (m *KeyMetadata) IsPendingDeletion() bool {
+	return m.DeletionDate != 0 && m.DeletionDate < float64(time.Now().Unix())
+}
+
 func defaultSeededKeyMetadata(metadata *KeyMetadata) {
 	metadata.Arn = config.ArnPrefix() + "key/" + metadata.KeyId
 	metadata.AWSAccountId = config.AWSAccountId
-	metadata.CreationDate = time.Now().Unix()
+	metadata.CreationDate = float64(time.Now().UnixNano()) / 1e9
 	metadata.Enabled = true
 	metadata.KeyManager = "CUSTOMER"
 	metadata.KeyState = KeyStateEnabled

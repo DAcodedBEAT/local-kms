@@ -9,7 +9,7 @@ import (
 	"sort"
 )
 
-func (k *AesKey) Decrypt(version uint32, ciphertext []byte, context map[string]*string) (plaintext []byte, err error) {
+func (k *AesKey) Decrypt(version uint32, ciphertext []byte, context map[string]string) (plaintext []byte, err error) {
 
 	if version >= uint32(len(k.BackingKeys)) {
 		err = errors.New("required version of backing key is invalid")
@@ -32,6 +32,11 @@ func (k *AesKey) Decrypt(version uint32, ciphertext []byte, context map[string]*
 
 	nonceSize := aesgcm.NonceSize()
 
+	if len(ciphertext) < nonceSize {
+		err = errors.New("ciphertext too short")
+		return
+	}
+
 	nonce := ciphertext[:nonceSize]
 
 	additionalDate := prepareAesEncryptionContext(context)
@@ -46,7 +51,7 @@ func (k *AesKey) Decrypt(version uint32, ciphertext []byte, context map[string]*
 
 //--------------------------------------------------------------------
 
-func (k *AesKey) EncryptAndPackage(plaintext []byte, context map[string]*string) (result []byte, err error) {
+func (k *AesKey) EncryptAndPackage(plaintext []byte, context map[string]string) (result []byte, err error) {
 
 	keyVersion := len(k.BackingKeys) - 1
 	dataKey := k.BackingKeys[keyVersion]
@@ -83,7 +88,7 @@ func (k *AesKey) EncryptAndPackage(plaintext []byte, context map[string]*string)
 	return
 }
 
-func (k *AesKey) encrypt(key [32]byte, plaintext []byte, context map[string]*string) (result []byte, err error) {
+func (k *AesKey) encrypt(key [32]byte, plaintext []byte, context map[string]string) (result []byte, err error) {
 
 	block, err := aes.NewCipher([]byte(key[:]))
 	if err != nil {
@@ -112,9 +117,9 @@ We prep this Encryption Context / Additional Data as per:
 
 	NB: Only the order of the encryption context pairs can vary. Everything else must be identical.
 */
-func prepareAesEncryptionContext(context map[string]*string) []byte {
+func prepareAesEncryptionContext(context map[string]string) []byte {
 
-	if context == nil || len(context) == 0 {
+	if len(context) == 0 {
 		return nil
 	}
 
@@ -131,14 +136,7 @@ func prepareAesEncryptionContext(context map[string]*string) []byte {
 
 	for _, k := range keys {
 		result = append(result, []byte(k)...)
-
-		// Check there is actually a string
-		if context[k] == nil {
-			continue
-		}
-
-		// If there is actually a value, include it
-		result = append(result, []byte(*context[k])...)
+		result = append(result, []byte(context[k])...)
 	}
 
 	return result

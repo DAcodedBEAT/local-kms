@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/service/kms"
+	kmstypes "github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/nsmithuk/local-kms/src/cmk"
 	"github.com/nsmithuk/local-kms/src/config"
 )
@@ -87,8 +87,8 @@ func (r *RequestHandler) getUsableKey(keyId string) (cmk.Key, Response) {
 	return key, Response{}
 }
 
-func (r *RequestHandler) validateTags(tags []*kms.Tag) Response {
-	if tags != nil && len(tags) > 0 {
+func (r *RequestHandler) validateTags(tags []kmstypes.Tag) Response {
+	if len(tags) > 0 {
 		for i, kv := range tags {
 
 			if len(*kv.TagKey) < 1 {

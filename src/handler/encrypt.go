@@ -2,9 +2,35 @@ package handler
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/cmk"
 )
+
+// rsaMaxPlaintextBytes returns the maximum plaintext size in bytes for the given
+// RSA key spec and encryption algorithm.
+//   - OAEP-SHA-1:   keyBytes - 2*hashLen(20) - 2  = keyBytes - 42
+//   - OAEP-SHA-256: keyBytes - 2*hashLen(32) - 2  = keyBytes - 66
+func rsaMaxPlaintextBytes(spec cmk.KeySpec, algo cmk.EncryptionAlgorithm) int {
+	var keyBytes int
+	switch spec {
+	case cmk.SpecRsa2048:
+		keyBytes = 256
+	case cmk.SpecRsa3072:
+		keyBytes = 384
+	case cmk.SpecRsa4096:
+		keyBytes = 512
+	default:
+		return -1
+	}
+	switch algo {
+	case cmk.EncryptionAlgorithmRsaOaepSha1:
+		return keyBytes - 42
+	case cmk.EncryptionAlgorithmRsaOaepSha256:
+		return keyBytes - 66
+	default:
+		return -1
+	}
+}
 
 func (r *RequestHandler) Encrypt() Response {
 
@@ -41,9 +67,8 @@ func (r *RequestHandler) Encrypt() Response {
 		return NewValidationExceptionResponse(msg)
 	}
 
-	if body.EncryptionAlgorithm == nil {
-		d := "SYMMETRIC_DEFAULT"
-		body.EncryptionAlgorithm = &d
+	if body.EncryptionAlgorithm == "" {
+		body.EncryptionAlgorithm = "SYMMETRIC_DEFAULT"
 	}
 
 	//----------------------------------
@@ -76,7 +101,14 @@ func (r *RequestHandler) Encrypt() Response {
 			return NewInvalidKeyUsageException(msg)
 		}
 
-		cipherResponse, err = k.Encrypt(body.Plaintext, cmk.EncryptionAlgorithm(*body.EncryptionAlgorithm))
+		algo := cmk.EncryptionAlgorithm(body.EncryptionAlgorithm)
+		if maxBytes := rsaMaxPlaintextBytes(k.GetMetadata().KeySpec, algo); maxBytes > 0 && len(body.Plaintext) > maxBytes {
+			msg := fmt.Sprintf("Plaintext is too long for the chosen RSA public key. The plaintext must be no longer than %d bytes for %s with %s.", maxBytes, k.GetMetadata().KeySpec, algo)
+			r.logger.Warnf(msg)
+			return NewInvalidKeyUsageException(msg)
+		}
+
+		cipherResponse, err = k.Encrypt(body.Plaintext, cmk.EncryptionAlgorithm(body.EncryptionAlgorithm))
 		if err != nil {
 			r.logger.Error(err.Error())
 			return NewInternalFailureExceptionResponse(err.Error())
@@ -104,6 +136,6 @@ func (r *RequestHandler) Encrypt() Response {
 	}{
 		KeyId:               key.GetArn(),
 		CiphertextBlob:      cipherResponse,
-		EncryptionAlgorithm: cmk.EncryptionAlgorithm(*body.EncryptionAlgorithm),
+		EncryptionAlgorithm: cmk.EncryptionAlgorithm(body.EncryptionAlgorithm),
 	})
 }

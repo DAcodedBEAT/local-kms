@@ -2,7 +2,7 @@ package handler
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/config"
 	"github.com/nsmithuk/local-kms/src/data"
 )
@@ -24,7 +24,7 @@ func (r *RequestHandler) ListAliases() Response {
 		marker = *body.Marker
 	}
 	if body.Limit != nil {
-		limit = *body.Limit
+		limit = int64(*body.Limit)
 	}
 
 	//--------------------------------
@@ -81,9 +81,11 @@ func (r *RequestHandler) ListAliases() Response {
 	//---
 
 	type AliasList struct {
-		AliasArn    string
-		AliasName   string
-		TargetKeyId string
+		AliasArn        string
+		AliasName       string
+		TargetKeyId     string
+		CreationDate    float64 `json:",omitempty"`
+		LastUpdatedDate float64 `json:",omitempty"`
 	}
 
 	response := &struct {
@@ -105,9 +107,11 @@ func (r *RequestHandler) ListAliases() Response {
 
 	for i, alias := range aliases {
 		response.Aliases[i] = &AliasList{
-			AliasArn:    alias.AliasArn,
-			AliasName:   alias.AliasName,
-			TargetKeyId: alias.TargetKeyId,
+			AliasArn:        alias.AliasArn,
+			AliasName:       alias.AliasName,
+			TargetKeyId:     alias.TargetKeyId,
+			CreationDate:    alias.CreationDate,
+			LastUpdatedDate: alias.LastUpdatedDate,
 		}
 	}
 

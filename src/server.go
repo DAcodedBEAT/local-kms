@@ -17,7 +17,30 @@ func Run(port, seedPath string) {
 	// DB Setup
 
 	database := data.NewDatabase(config.DatabasePath)
-	defer database.Close()
+	defer func() {
+		if err := database.Close(); err != nil {
+			logger.Errorf("Failed to close database: %v", err)
+		}
+	}()
+
+	//-----------
+	// Health Check
+
+	healthReport := database.HealthCheck()
+	if healthReport.DiskSpaceIssue != "" {
+		logger.Warnf("⚠ Low disk space: %s", healthReport.DiskSpaceIssue)
+	}
+	if len(healthReport.Entries) > 0 {
+		logger.Warnf("⚠ Database corruption detected!")
+		logger.Warnf("Corrupted Keys:    %d", healthReport.CorruptedKeys)
+		logger.Warnf("Corrupted Aliases: %d", healthReport.CorruptedAliases)
+		logger.Warnf("Corrupted Tags:    %d", healthReport.CorruptedTags)
+		logger.Warn("Corruption details:")
+		for _, entry := range healthReport.Entries {
+			logger.Warnf("  - %s", entry.Description)
+		}
+		logger.Warn("Run 'make build-recovery && ./recovery -db " + config.DatabasePath + "' to scan and repair")
+	}
 
 	//-----------
 	// Seeding
@@ -26,6 +49,11 @@ func Run(port, seedPath string) {
 
 	//-----------
 	// Start
+
+	http.HandleFunc("/_health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		_, _ = fmt.Fprint(w, "OK")
+	})
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		handleRequest(w, r, database)
@@ -103,25 +131,25 @@ func handleRequest(w http.ResponseWriter, r *http.Request, database *data.Databa
 
 func respond(w http.ResponseWriter, r handler.Response) {
 	w.WriteHeader(r.Code)
-	fmt.Fprint(w, r.Body)
+	_, _ = fmt.Fprint(w, r.Body)
 }
 
 func error404(w http.ResponseWriter) {
 	w.WriteHeader(404)
-	fmt.Fprint(w, "Page not found")
+	_, _ = fmt.Fprint(w, "Page not found")
 }
 
 func error405(w http.ResponseWriter) {
 	w.WriteHeader(405)
-	fmt.Fprint(w, "Method Not Allowed")
+	_, _ = fmt.Fprint(w, "Method Not Allowed")
 }
 
 func error415(w http.ResponseWriter) {
 	w.WriteHeader(415)
-	fmt.Fprint(w, "Only JSON based content types accepted")
+	_, _ = fmt.Fprint(w, "Only JSON based content types accepted")
 }
 
 func error501(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(501)
-	fmt.Fprintf(w, "Passed X-Amz-Target (%s) is not implemented", r.Header.Get("X-Amz-Target"))
+	_, _ = fmt.Fprintf(w, "Passed X-Amz-Target (%s) is not implemented", r.Header.Get("X-Amz-Target"))
 }

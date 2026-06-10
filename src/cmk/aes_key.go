@@ -69,7 +69,7 @@ func (k *AesKey) SetParametersForImport(p *ParametersForImport) {
 
 func (k *AesKey) ImportKeyMaterial(m []byte) error {
 	if len(m) != 32 {
-		return errors.New("Invalid key length. Key must be 32 bytes in length.")
+		return errors.New("invalid key length; key must be 32 bytes in length")
 	}
 
 	var key [32]byte
@@ -82,7 +82,7 @@ func (k *AesKey) ImportKeyMaterial(m []byte) error {
 	} else if key != k.BackingKeys[0] {
 		// else if the key material doesn't match what was already imported then
 		// throw and error
-		return errors.New("Key material does not match existing key material.")
+		return errors.New("key material does not match existing key material")
 	}
 
 	return nil
@@ -108,7 +108,7 @@ func (k *AesKey) RotateIfNeeded() bool {
 //-----------------------
 
 /*
-	Generates a new 32 bytes key from random data
+Generates a new 32 bytes key from random data
 */
 func generateKey() [32]byte {
 	var key [32]byte
@@ -121,7 +121,7 @@ func generateKey() [32]byte {
 
 //---
 
-func (k *AesKey) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (k *AesKey) UnmarshalYAML(unmarshal func(any) error) error {
 
 	// Cannot use embedded 'Key' struct
 	// https://github.com/go-yaml/yaml/issues/263

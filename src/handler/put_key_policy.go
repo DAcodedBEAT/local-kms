@@ -2,8 +2,7 @@ package handler
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/service/kms"
-	"github.com/nsmithuk/local-kms/src/cmk"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/config"
 )
 
@@ -30,19 +29,20 @@ func (r *RequestHandler) PutKeyPolicy() Response {
 		return NewValidationExceptionResponse(msg)
 	}
 
-	if body.PolicyName == nil {
-		msg := "1 validation error detected: Value null at 'policyName' failed to satisfy constraint: Member must not be null"
+	policyName := "default"
+	if body.PolicyName != nil {
+		policyName = *body.PolicyName
+	}
+
+	if policyName != "default" {
+		msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'policyName' failed to satisfy constraint: Member must satisfy regular expression pattern: [\\w]+", policyName)
 
 		r.logger.Warnf(msg)
 		return NewValidationExceptionResponse(msg)
 	}
 
-	//---
-
-	policyName := *body.PolicyName
-
-	if policyName != "default" {
-		msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'policyName' failed to satisfy constraint: Member must satisfy regular expression pattern: [\\w]+", policyName)
+	if len(*body.Policy) > 32768 {
+		msg := "1 validation error detected: Value at 'policy' failed to satisfy constraint: Member must have length less than or equal to 32768"
 
 		r.logger.Warnf(msg)
 		return NewValidationExceptionResponse(msg)
@@ -64,17 +64,7 @@ func (r *RequestHandler) PutKeyPolicy() Response {
 
 	//---
 
-	if key.GetMetadata().DeletionDate != 0 {
-		// Key is pending deletion; cannot create alias
-		msg := fmt.Sprintf("%s is pending deletion.", keyArn)
-
-		r.logger.Warnf(msg)
-		return NewKMSInvalidStateExceptionResponse(msg)
-	}
-
-	//---
-
-	key.(*cmk.AesKey).Policy = *body.Policy
+	key.SetPolicy(*body.Policy)
 
 	//--------------------------------
 	// Save the key

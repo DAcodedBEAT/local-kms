@@ -2,11 +2,16 @@ package handler
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/service/kms"
+	"regexp"
+	"strings"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/config"
 	"github.com/nsmithuk/local-kms/src/data"
-	"strings"
 )
+
+var validAliasName = regexp.MustCompile(`^alias/[a-zA-Z0-9/_-]+$`)
 
 func (r *RequestHandler) CreateAlias() Response {
 
@@ -34,17 +39,18 @@ func (r *RequestHandler) CreateAlias() Response {
 		return NewMissingParameterResponse(msg)
 	}
 
-	if !strings.HasPrefix(*body.AliasName, "alias/") {
-		msg := "Alias must start with the prefix \"alias/\". Please see " +
-			"http://docs.aws.amazon.com/kms/latest/developerguide/programming-aliases.html"
+	if !validAliasName.MatchString(*body.AliasName) {
+		msg := fmt.Sprintf("The specified alias name %q is not valid. An alias name must begin with 'alias/' "+
+			"followed by one or more alphanumeric characters, forward slashes, underscores, or dashes.", *body.AliasName)
 
 		r.logger.Warnf(msg)
-		return NewValidationExceptionResponse(msg)
+		return NewInvalidAliasNameExceptionResponse(msg)
 	}
 
-	if strings.HasPrefix(*body.AliasName, "alias/aws") {
-		r.logger.Warnf("Cannot create alias with prefix 'alias/aws/'")
-		return NewNotAuthorizedExceptionResponse("")
+	if strings.HasPrefix(*body.AliasName, "alias/aws/") {
+		msg := fmt.Sprintf("The alias namespace \"alias/aws/\" is reserved for AWS managed keys and cannot be used for customer managed keys.")
+		r.logger.Warnf(msg)
+		return NewNotAuthorizedExceptionResponse(msg)
 	}
 
 	if len(*body.AliasName) > 256 {
@@ -56,6 +62,13 @@ func (r *RequestHandler) CreateAlias() Response {
 	}
 
 	// --------------------------------
+
+	// AWS rejects alias names as TargetKeyId — aliases must refer to keys, not other aliases.
+	if strings.HasPrefix(*body.TargetKeyId, "alias/") {
+		msg := "Aliases must refer to keys. Not aliases"
+		r.logger.Warnf(msg)
+		return NewValidationExceptionResponse(msg)
+	}
 
 	target := config.EnsureArn("key/", *body.TargetKeyId)
 
@@ -92,13 +105,19 @@ func (r *RequestHandler) CreateAlias() Response {
 		return NewAlreadyExistsExceptionResponse(msg)
 	}
 
+	now := float64(time.Now().Unix())
 	alias := &data.Alias{
-		AliasName:   *body.AliasName,
-		AliasArn:    aliasArn,
-		TargetKeyId: key.GetMetadata().KeyId,
+		AliasName:       *body.AliasName,
+		AliasArn:        aliasArn,
+		TargetKeyId:     key.GetMetadata().KeyId,
+		CreationDate:    now,
+		LastUpdatedDate: now,
 	}
 
-	r.database.SaveAlias(alias)
+	if err := r.database.SaveAlias(alias); err != nil {
+		r.logger.Error(err)
+		return NewInternalFailureExceptionResponse(err.Error())
+	}
 
 	r.logger.Infof("New alias created: %s -> %s\n", alias.AliasArn, key.GetArn())
 

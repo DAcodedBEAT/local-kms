@@ -2,10 +2,12 @@ package handler
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/service/kms"
-	"github.com/nsmithuk/local-kms/src/config"
 	"reflect"
 	"strings"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/service/kms"
+	"github.com/nsmithuk/local-kms/src/config"
 )
 
 func (r *RequestHandler) UpdateAlias() Response {
@@ -132,8 +134,12 @@ func (r *RequestHandler) UpdateAlias() Response {
 	//---
 
 	alias.TargetKeyId = targetKey.GetMetadata().KeyId
+	alias.LastUpdatedDate = float64(time.Now().Unix())
 
-	r.database.SaveAlias(alias)
+	if err := r.database.SaveAlias(alias); err != nil {
+		r.logger.Error(err)
+		return NewInternalFailureExceptionResponse(err.Error())
+	}
 
 	//---
 

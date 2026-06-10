@@ -26,9 +26,9 @@ func NewRequestHandler(r *http.Request, l *log.Logger, d *data.Database) *Reques
 }
 
 /*
-	Decodes the request's JSON body into the passed interface
+Decodes the request's JSON body into the passed interface
 */
-func (r *RequestHandler) decodeBodyInto(v interface{}) error {
+func (r *RequestHandler) decodeBodyInto(v any) error {
 	decoder := json.NewDecoder(r.request.Body)
 	return decoder.Decode(v)
 }
@@ -45,7 +45,7 @@ func (r Response) Empty() bool {
 	return r.Code == 0 && r.Body == ""
 }
 
-func NewResponse(code int, v interface{}) Response {
+func NewResponse(code int, v any) Response {
 	if v == nil {
 		return Response{code, ""}
 	}
@@ -103,6 +103,10 @@ func NewNotAuthorizedExceptionResponse(message string) Response {
 
 func NewValidationExceptionResponse(message string) Response {
 	return New400ExceptionResponse("ValidationException", message)
+}
+
+func NewInvalidAliasNameExceptionResponse(message string) Response {
+	return New400ExceptionResponse("InvalidAliasNameException", message)
 }
 
 func NewKMSInvalidStateExceptionResponse(message string) Response {

@@ -1,4 +1,4 @@
-FROM golang:1.20-alpine
+FROM golang:1.26-alpine
 
 RUN mkdir -p /go/src/github.com/nsmithuk/local-kms
 COPY . /go/src/github.com/nsmithuk/local-kms
@@ -8,13 +8,11 @@ WORKDIR /go/src/github.com/nsmithuk/local-kms
 RUN apk add --no-cache --update git \
     && go install github.com/bokwoon95/wgo@latest
 
-RUN mkdir /init
-RUN mkdir /data
+RUN mkdir /init && mkdir /data
 
-ENV KMS_ACCOUNT_ID 111122223333
-ENV KMS_REGION eu-west-2
-ENV KMS_DATA_PATH /data
+ENV KMS_ACCOUNT_ID=111122223333
+ENV KMS_REGION=eu-west-2
+ENV KMS_DATA_PATH=/data
+ENV PORT=8080
 
-ENV PORT 8080
-
-ENTRYPOINT ["wgo", "run", "start.go"]
+ENTRYPOINT ["wgo", "run", "./cmd/local-kms"]

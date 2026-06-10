@@ -3,7 +3,7 @@ package handler
 import (
 	"fmt"
 
-	"github.com/aws/aws-sdk-go/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/cmk"
 )
 
@@ -73,6 +73,8 @@ func (r *RequestHandler) DeleteImportedKeyMaterial() Response {
 	// same key material again.
 	keyMetadata.KeyState = cmk.KeyStatePendingImport
 	keyMetadata.Enabled = false
+	keyMetadata.ValidTo = 0
+	keyMetadata.ExpirationModel = ""
 
 	//--------------------------------
 	// Save the key
@@ -84,5 +86,9 @@ func (r *RequestHandler) DeleteImportedKeyMaterial() Response {
 
 	r.logger.Infof("Deleted key material for key %s", key.GetArn())
 
-	return NewResponse(200, nil)
+	return NewResponse(200, &struct {
+		KeyId string
+	}{
+		KeyId: key.GetArn(),
+	})
 }

@@ -2,7 +2,7 @@ package handler
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/config"
 	"strings"
 )
@@ -34,9 +34,10 @@ func (r *RequestHandler) DeleteAlias() Response {
 		return NewValidationExceptionResponse(msg)
 	}
 
-	if strings.HasPrefix(*body.AliasName, "alias/aws") {
-		r.logger.Warnf("Cannot remove alias with prefix 'alias/aws/'")
-		return NewNotAuthorizedExceptionResponse("")
+	if strings.HasPrefix(*body.AliasName, "alias/aws/") {
+		msg := fmt.Sprintf("The alias %s is a AWS managed alias and cannot be deleted.", *body.AliasName)
+		r.logger.Warnf(msg)
+		return NewKMSInvalidStateExceptionResponse(msg)
 	}
 
 	//--------------------------------
@@ -52,7 +53,10 @@ func (r *RequestHandler) DeleteAlias() Response {
 		return NewNotFoundExceptionResponse(msg)
 	}
 
-	r.database.DeleteObject(aliasArn)
+	if err := r.database.DeleteObject(aliasArn); err != nil {
+		r.logger.Error(err)
+		return NewInternalFailureExceptionResponse(err.Error())
+	}
 
 	//---
 

@@ -1,5 +1,3 @@
-version: "3"
-
 services:
   kms:
     container_name: local-kms-dev

@@ -2,7 +2,7 @@ package handler
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/cmk"
 	"github.com/nsmithuk/local-kms/src/config"
 	"time"
@@ -52,14 +52,9 @@ func (r *RequestHandler) DisableKeyRotation() Response {
 	}
 
 	if _, ok := key.(*cmk.AesKey); !ok {
-
-		r.logger.Warnf(fmt.Sprintf("Key '%s' does does not support rotation", keyArn))
-
-		// I suspect that it's an error to return a 200, but it is what AWS currently do.
-		return NewResponse(200, nil)
-
-		// This is what I'd expect:
-		//return NewUnsupportedOperationException("")
+		msg := fmt.Sprintf("Key '%s' does not support rotation", keyArn)
+		r.logger.Warnf(msg)
+		return NewUnsupportedOperationException(msg)
 	}
 
 	//---

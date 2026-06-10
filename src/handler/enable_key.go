@@ -3,9 +3,8 @@ package handler
 import (
 	"fmt"
 
-	"github.com/aws/aws-sdk-go/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/cmk"
-	"github.com/nsmithuk/local-kms/src/config"
 )
 
 func (r *RequestHandler) EnableKey() Response {
@@ -29,24 +28,21 @@ func (r *RequestHandler) EnableKey() Response {
 
 	//---
 
-	keyArn := config.EnsureArn("key/", *body.KeyId)
-
-	// Lookup the key
-	key, _ := r.database.LoadKey(keyArn)
-
-	if key == nil {
-		msg := fmt.Sprintf("Key '%s' does not exist", keyArn)
-
-		r.logger.Warnf(msg)
-		return NewNotFoundExceptionResponse(msg)
+	key, response := r.getKey(*body.KeyId)
+	if !response.Empty() {
+		return response
 	}
 
 	//---
 
-	if key.GetMetadata().DeletionDate != 0 {
-		// Key is pending deletion; cannot create alias
-		msg := fmt.Sprintf("%s is pending deletion.", keyArn)
+	switch key.GetMetadata().KeyState {
+	case cmk.KeyStatePendingDeletion:
+		msg := fmt.Sprintf("%s is pending deletion.", key.GetArn())
+		r.logger.Warnf(msg)
+		return NewKMSInvalidStateExceptionResponse(msg)
 
+	case cmk.KeyStatePendingImport:
+		msg := fmt.Sprintf("%s is pending import.", key.GetArn())
 		r.logger.Warnf(msg)
 		return NewKMSInvalidStateExceptionResponse(msg)
 	}

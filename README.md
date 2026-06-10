@@ -1,9 +1,8 @@
 # Local KMS (LKMS)
 
-A mock version of AWS' Key Management Service, for local development and testing. Written in Go.
+Mock AWS Key Management Service for local dev/testing. Written in Go.
 
-_Whilst this project does use real encryption ([AES](https://golang.org/pkg/crypto/aes/), [ECDSA](https://golang.org/pkg/crypto/ecdsa/) and [RSA](https://golang.org/pkg/crypto/rsa/)), it is designed for 
-development and testing against KMS; not for use in a production environment._
+_Uses real encryption ([AES](https://golang.org/pkg/crypto/aes/), [ECDSA](https://golang.org/pkg/crypto/ecdsa/), [RSA](https://golang.org/pkg/crypto/rsa/)), but designed for dev/test against KMS — not production._
 
 #### (Local) KMS Usage Guides
 * [Using AWS KMS via the CLI with a Symmetric Key](https://nsmith.net/aws-kms-cli)
@@ -16,32 +15,60 @@ development and testing against KMS; not for use in a production environment._
 
 * Symmetric (AES) keys
 * Asymmetric keys (ECC and RSA)
-* Management of Customer Master Keys; including:
-    * Enabling and disabling keys
-    * Scheduling key deletion
-    * Enabling/disabling automated key rotation
-* Management of key aliases
+* Customer Master Key management:
+    * Enable/disable keys
+    * Schedule key deletion
+    * Enable/disable automated key rotation
+* Key alias management
 * Encryption
     * Encryption Contexts
 * Decryption
-* Generating a data key, with or without plain text
-* Generating a data key pair, with or without plain text
-* Generating random data
-* Importing your own key material
-* Signing and verifying messages
+* Data key generation, with or without plain text
+* Data key pair generation, with or without plain text
+* Random data generation
+* Custom key material import
+* Sign/verify messages
     * RAW and DIGEST
 * Tags
 * Key Policies: Get & Put
 
 #### Seeding
-Seeding allows LKMS to be supplied with a set of pre-defined keys and aliases on startup, giving you a deterministic and versionable way to manage test keys.
+Seeding supplies pre-defined keys and aliases on startup — deterministic, versionable test key management.
 
-If a key in the seeding file already exists, it will not be overwritten or amended by the seeding process.
+Existing keys in seeding file not overwritten or amended.
 
 ### Does not (yet) support
 
-* Grants
-* Operations relating to a Custom Key Store
+* Grants (`CreateGrant`, `ListGrants`, `RevokeGrant`, `RetireGrant`, `ListRetirableGrants`)
+* HMAC keys (`HMAC_224`, `HMAC_256`, `HMAC_384`, `HMAC_512` key specs)
+* HMAC operations (`GenerateMac`, `VerifyMac`)
+* On-demand key rotation (`RotateKeyOnDemand`, `ListKeyRotations`)
+* Multi-region keys (`MultiRegion: true`, `mrk-` key ID prefix, `ReplicateKey`, `UpdatePrimaryRegion`)
+* `ListKeyPolicies`
+* `DeriveSharedSecret` (ECDH shared secret derivation)
+* Custom Key Store operations
+
+### Differences from AWS KMS
+
+#### Ciphertext format
+
+Local KMS uses custom binary format **not compatible with real AWS KMS** or moto (Python AWS mock library). Ciphertext produced by Local KMS cannot be decrypted by moto or real KMS, and vice versa. Format embeds full key ARN and backing-key version index for correct key rotation:
+
+```
+[1 byte: ARN length][ARN bytes][4 bytes: key version (LE uint32)][12-byte nonce][AES-GCM ciphertext+tag]
+```
+
+Don't mix environments (local-kms ↔ moto ↔ real KMS) for same encrypted data.
+
+#### Key rotation
+
+Local KMS implements real key rotation: when enabled, new backing key appended to `BackingKeys` array each rotation cycle (annually by default). New encryptions use newest backing key; existing ciphertext still decrypts via version index in blob.
+
+AWS KMS and moto track rotation state but cryptographic rotation behavior differs in implementation. Tests relying on rotation-specific ciphertext versioning only pass against Local KMS.
+
+#### `ScheduleKeyDeletion` timestamp format
+
+AWS returns deletion timestamp in scientific notation (e.g. `1.5565824E9`). Local KMS returns plain integer (`1556582400`). Official AWS SDKs treat these identically.
 
 ## Download
 
@@ -55,17 +82,16 @@ Pre-built binaries:
 
 ## Getting Started with Docker
 
-Images are available on both [Docker Hub](https://hub.docker.com/r/nsmithuk/local-kms) and [AWS Public ECR](https://gallery.ecr.aws/nsmithuk/local-kms).
+Images on [Docker Hub](https://hub.docker.com/r/nsmithuk/local-kms) and [AWS Public ECR](https://gallery.ecr.aws/nsmithuk/local-kms).
 
-The quickest way to get started is with Docker. To get LKMS up, running and accessible on port 8080, you can run:
+Quickest start — LKMS up on port 8080:
 ```
 docker run -p 8080:8080 nsmithuk/local-kms
 ```
 
 ### Seeding and Docker
-By default LKMS checks for a seeding file within the container at `/init/seed.yaml`. The simplest way of using a seeding file is to mount a directory on the host's file system containing a file named `seed.yaml`.
+LKMS checks for seeding file at `/init/seed.yaml` by default. Simplest approach: mount host directory containing `seed.yaml`.
 
-Then you can run:
 ```
 docker run -p 8080:8080 \
 --mount type=bind,source="$(pwd)"/init,target=/init \
@@ -73,7 +99,7 @@ nsmithuk/local-kms
 ```
 
 ### Persisting data and Docker
-By default in Docker, data will be stored in the directory `/data/`. To persist data between container executions, mount `/data` to a directory on the host's file system.
+Docker stores data in `/data/` by default. To persist between runs, mount `/data` to host filesystem.
 ```
 docker run -p 8080:8080 \
 --mount type=bind,source="$(pwd)"/data,target=/data \
@@ -82,9 +108,9 @@ nsmithuk/local-kms
 
 ## Seeding file format
 
-_Both Symmetric and Asymmetric (RSA and ECC) keys are supported in the seeding file._
+_Symmetric and Asymmetric (RSA and ECC) keys supported in seeding file._
 
-A simple seeding file looks like
+Simple seeding file:
 ```yaml
 Keys:
   Symmetric:
@@ -110,13 +136,11 @@ Aliases:
   - AliasName: alias/testing
     TargetKeyId: bc436485-5092-42b8-92a3-0aa8b93536dc
 ```
-Which will create two keys: an AES Key with ID `bc436485-5092-42b8-92a3-0aa8b93536dc` and a 256 bit ECC Key. 
-An alias with the name `alias/testing` refers to the AES key.
+Creates two keys: AES key with ID `bc436485-5092-42b8-92a3-0aa8b93536dc` and 256-bit ECC key. Alias `alias/testing` points to AES key.
 
-`BackingKeys ` must be an array of **one or more** hex encoded 256bit keys (can be generated using `openssl rand -hex 32`).
-Only AES Keys support backing keys.
+`BackingKeys` must be array of **one or more** hex-encoded 256-bit keys (generate with `openssl rand -hex 32`). Only AES keys support backing keys.
 
-Seeding files also support multiple keys, aliases and backing keys. Adding more than one backing key simulates the effect of the CMK having been rotated. 
+Seeding files support multiple keys, aliases, and backing keys. Multiple backing keys simulates CMK rotation.
 
 ```yaml
 Keys:
@@ -143,11 +167,11 @@ Aliases:
 
 ```
 
-Keys also support the following optional fields:
-- **Metadata -> Description**: A free text field into which you can enter a description of the key.
-- **Metadata -> Origin**: Can be set to `EXTERNAL` to seed keys with custom key material. If `Origin` is set to `EXTERNAL` then `BackingKeys` is optional array that can contain at most 1 hex encoded 256bit key.
-- **Metadata -> KeyUsage**: For Asymmetric Keys. ECC keys only support SIGN_VERIFY. RSA keys support SIGN_VERIFY or ENCRYPT_DECRYPT.
-- **NextKeyRotation**: AES Keys Only. An ISO 8601 formatted date. Supplying this enables key rotation, and sets the next rotation to take place on the supplied date. If the date is in the past, rotation will happen the first time the key is accessed.
+Optional key fields:
+- **Metadata -> Description**: Free text key description.
+- **Metadata -> Origin**: Set to `EXTERNAL` for custom key material. With `EXTERNAL`, `BackingKeys` is optional array of at most 1 hex-encoded 256-bit key.
+- **Metadata -> KeyUsage**: Asymmetric keys only. ECC supports `SIGN_VERIFY` only. RSA supports `SIGN_VERIFY` or `ENCRYPT_DECRYPT`.
+- **NextKeyRotation**: AES keys only. ISO 8601 date. Enables rotation, sets next rotation date. Past date triggers rotation on first key access.
 
 ```yaml
 Keys:
@@ -168,9 +192,9 @@ Keys:
           KeyId: 5d05267f-bb87-4d0b-8594-295a4371d414
           Origin: EXTERNAL
 ```
-In the example above, 2 `EXTERNAL` origin keys will be created. 
-- a key with the ID `5ef77041-d1e6-4af1-9a41-e49a4b45efb6`, with pre-imported key material 
-- a key with the ID `5d05267f-bb87-4d0b-8594-295a4371d414` in a `PendingImport` state
+Above creates 2 `EXTERNAL` origin keys:
+- `5ef77041-d1e6-4af1-9a41-e49a4b45efb6` with pre-imported key material
+- `5d05267f-bb87-4d0b-8594-295a4371d414` in `PendingImport` state
 
 
 ```yaml
@@ -222,74 +246,71 @@ Keys:
           M7m7XZ2xlDK3wcEAs1QEIoQjjwnhcptQ6A==
           -----END EC PRIVATE KEY-----
 ```
-In the example above, 2 asymmetric keys will be created. Both keys may be used for Signing and Verification. Key size
-is determined from the PEM encoded key.
- - an RSA key with the ID `ff275b92-0def-4dfc-b0f6-87c96b26c6c7` (2048 bits).
- - an ECC Key with the ID `800d5768-3fd7-4edd-a4b8-4c81c3e4c147` (256 bits).
+Above creates 2 asymmetric keys, both for sign/verify. Key size derived from PEM.
+ - RSA key `ff275b92-0def-4dfc-b0f6-87c96b26c6c7` (2048 bits)
+ - ECC key `800d5768-3fd7-4edd-a4b8-4c81c3e4c147` (256 bits)
  
-The `PrivateKeyPem` field is a multiline string. In YAML the  pipe character `|` at the end of the line is one way to do this.
-PrivateKeyPem is in PKCS8 format and may be generated using Openssl or similar tools.
-See below for bash functions to generate the Asymmetric Key format. 
+`PrivateKeyPem` is multiline string — pipe `|` in YAML handles this. Format is PKCS8, generated via OpenSSL or similar.
+See below for bash functions to generate asymmetric key seed format.
 
-:arrow_right: &nbsp; When choosing signing keys consider signature size but also cost and compatibility.
-ECC 256 bit keys provide the smallest signature but RSA 2048 key operations are currently cheaper and are widely used. 
+Signing key choice: ECC 256-bit = smallest signatures; RSA 2048-bit = cheaper per op, widely compatible.
 
 ## Configuration
-The following environment variables can be set to configure LKMS.
+Environment variables for LKMS config:
 
-- **PORT**: Port on which LKMS will run. Default: 8080
-- **KMS_ACCOUNT_ID**: Dummy AWS account ID to use. Default: 111122223333
-- **KMS_REGION**: Dummy region to use. Default: eu-west-2
-- **KMS_SEED_PATH**: Path at which the seeding file is supplied. Default: `/init/seed.yaml`
-- **KMS_DATA_PATH**: Path LKMS will put its database.
+- **PORT**: Listen port. Default: 8080
+- **KMS_ACCOUNT_ID**: Dummy AWS account ID. Default: 111122223333
+- **KMS_REGION**: Dummy region. Default: eu-west-2
+- **KMS_SEED_PATH**: Seeding file path. Default: `/init/seed.yaml`
+- **KMS_DATA_PATH**: Database path.
 	- Docker default: `/data`
 	- Native default: `/tmp/local-kms`
 
-Warning: keys and aliases are stored under their ARN, thus their identity includes both KMS_ACCOUNT_ID and KMS_REGION. Changing these values will make pre-existing data inaccessible.
-
-## Configuration
-The following environment variables can be set to configure LKMS.
-
-## Known Differences from AWS' KMS
-
-When successfully calling `ScheduleKeyDeletion`, the timestamp returned from AWS is in Scientific Notation/Standard Form.
-For example `1.5565824E9`. The same request to Local KMS will return `1556582400`. This should have no effect on
-official AWS SDKs, as from a JSON interpreter's perspective the two are identical. It does however seem difficult to
-force Go to return the value in Standard Form.
-See: https://github.com/nsmithuk/local-kms/issues/4
+Warning: keys and aliases stored under ARN — identity includes both `KMS_ACCOUNT_ID` and `KMS_REGION`. Changing these makes pre-existing data inaccessible.
 
 ## Building from source
 
 ### Prerequisites
 
-Tested with Go 1.17
+Tested with Go 1.26
 
 ### Install
 
+#### Using git and make (recommended)
+
 ```sh
-go get -u github.com/nsmithuk/local-kms
-cd $GOPATH/src/github.com/nsmithuk/local-kms
-go install
+git clone https://github.com/nsmithuk/local-kms.git
+cd local-kms
+make build
+```
+
+Binary created as `./local-kms`
+
+#### Using Go directly
+
+```sh
+git clone https://github.com/nsmithuk/local-kms.git
+cd local-kms
+go build -o local-kms ./cmd/local-kms
 ```
 
 ### Run
 
 ```sh
-$GOPATH/bin/local-kms
-
+./local-kms
 ```
 
-Local KMS runs on port http://localhost:8080 by default.
+Runs on `http://localhost:8080` by default.
 
 ### Using LKMS with the CLI
 
-For a more in-depth guide to these commands, please see:
+More detail:
 * [Using AWS KMS via the CLI with a Symmetric Key](https://nsmith.net/aws-kms-cli)
 * [Using AWS KMS via the CLI with Elliptic Curve (ECC) Keys](https://nsmith.net/aws-kms-cli-ecc)
 
-The examples here use `awslocal`, which wraps the `aws` command to include the required endpoint.
+Examples use `awslocal`, which wraps `aws` with required endpoint.
 
-e.g. The following two commands are equivalent
+e.g. These two commands equivalent:
 ```bash
 aws kms create-key --endpoint=http://localhost:4599
 and
@@ -303,7 +324,7 @@ awslocal kms create-key
 
 #### Encrypt data
 ```bash
-awslocal kms Dncrypt \
+awslocal kms encrypt \
 --key-id 0579fe9c-129b-490a-adb0-42589ac4a017 \
 --plaintext "My Test String"
 ```
@@ -329,7 +350,7 @@ expirationModel=${3:-KEY_MATERIAL_DOES_NOT_EXPIRE}
 validToInput=${4}
 
 if [ "$wrappingAlg" == "RSAES_PKCS1_V1_5" ]; then
-    echo "RSAES_PKCS1_V1_5 is nto supported by this script. Please use RSAES_OAEP_SHA_[1|256]."
+    echo "RSAES_PKCS1_V1_5 is not supported by this script. Please use RSAES_OAEP_SHA_[1|256]."
     exit 1
 fi
 
@@ -405,32 +426,14 @@ awslocal kms describe-key --key-id $key_id
 
 #### Creating a Customer Master Key
 ```bash
-http -v --json POST http://localhost:4599/ \
-X-Amz-Target:TrentService.CreateKey
-
-POST / HTTP/1.1
-Accept: application/json, */*
-Accept-Encoding: gzip, deflate
-Connection: keep-alive
-Content-Length: 0
-Content-Type: application/json
-Host: localhost:4599
-User-Agent: HTTPie/1.0.2
-X-Amz-Target: TrentService.CreateKey
-
-
-
-HTTP/1.1 200 OK
-Content-Length: 329
-Content-Type: application/x-amz-json-1.1
-Date: Thu, 24 Oct 2019 11:17:30 GMT
-
+http --json POST http://localhost:4599/ X-Amz-Target:TrentService.CreateKey
+```
+```json
 {
     "KeyMetadata": {
         "AWSAccountId": "111122223333",
         "Arn": "arn:aws:kms:eu-west-2:111122223333:key/f154ba79-0b7d-4f19-9983-309f706ebc83",
         "CreationDate": 1571915850,
-        "Description": "",
         "Enabled": true,
         "KeyId": "f154ba79-0b7d-4f19-9983-309f706ebc83",
         "KeyManager": "CUSTOMER",
@@ -441,74 +444,33 @@ Date: Thu, 24 Oct 2019 11:17:30 GMT
 }
 ```
 
-#### Encrypting some (base64 encoded) data
+#### Encrypting data (base64-encoded plaintext)
 ```bash
-http -v --json POST http://localhost:4599/ \
-X-Amz-Target:TrentService.Encrypt \
-KeyId=f154ba79-0b7d-4f19-9983-309f706ebc83 \
-Plaintext='SGVsbG8='
-
-POST / HTTP/1.1
-Accept: application/json, */*
-Accept-Encoding: gzip, deflate
-Connection: keep-alive
-Content-Length: 74
-Content-Type: application/json
-Host: localhost:4599
-User-Agent: HTTPie/1.0.2
-X-Amz-Target: TrentService.Encrypt
-
+http --json POST http://localhost:4599/ X-Amz-Target:TrentService.Encrypt \
+  KeyId=f154ba79-0b7d-4f19-9983-309f706ebc83 Plaintext='SGVsbG8='
+```
+```json
 {
-    "KeyId": "f154ba79-0b7d-4f19-9983-309f706ebc83",
-    "Plaintext": "SGVsbG8="
-}
-
-HTTP/1.1 200 OK
-Content-Length: 259
-Content-Type: application/x-amz-json-1.1
-Date: Thu, 24 Oct 2019 11:18:36 GMT
-
-{
-    "CiphertextBlob": "S2Fybjphd3M6a21zOmV1LXdlc3QtMjoxMTExMjIyMjMzMzM6a2V5L2YxNTRiYTc5LTBiN2QtNGYxOS05OTgzLTMwOWY3MDZlYmM4MwAAAABjIzzp52djy/L4prvuGoG+jZ6OJzgQGi6n2CRO5dmfJHw=",
+    "CiphertextBlob": "S2Fybjphd3M6a21zOmV1LXdlc3QtMjoxMTExMjIyMjMzMzM6a2V5L2YxNTRiYTc5...",
     "KeyId": "arn:aws:kms:eu-west-2:111122223333:key/f154ba79-0b7d-4f19-9983-309f706ebc83"
 }
 ```
 
-#### Decrypting some KMS cipher text
+#### Decrypting ciphertext
 ```bash
-http -v --json POST http://localhost:4599/ \
-X-Amz-Target:TrentService.Decrypt \
-CiphertextBlob='S2Fybjphd3M6a21zOmV1LXdlc3QtMjoxMTExMjIyMjMzMzM6a2V5L2YxNTRiYTc5LTBiN2QtNGYxOS05OTgzLTMwOWY3MDZlYmM4MwAAAABjIzzp52djy/L4prvuGoG+jZ6OJzgQGi6n2CRO5dmfJHw='
-
-POST / HTTP/1.1
-Accept: application/json, */*
-Accept-Encoding: gzip, deflate
-Connection: keep-alive
-Content-Length: 174
-Content-Type: application/json
-Host: localhost:4599
-User-Agent: HTTPie/1.0.2
-X-Amz-Target: TrentService.Decrypt
-
-{
-    "CiphertextBlob": "S2Fybjphd3M6a21zOmV1LXdlc3QtMjoxMTExMjIyMjMzMzM6a2V5L2YxNTRiYTc5LTBiN2QtNGYxOS05OTgzLTMwOWY3MDZlYmM4MwAAAABjIzzp52djy/L4prvuGoG+jZ6OJzgQGi6n2CRO5dmfJHw="
-}
-
-HTTP/1.1 200 OK
-Content-Length: 110
-Content-Type: application/x-amz-json-1.1
-Date: Thu, 24 Oct 2019 11:20:17 GMT
-
+http --json POST http://localhost:4599/ X-Amz-Target:TrentService.Decrypt \
+  CiphertextBlob='S2Fybjphd3M6a21zOmV1LXdlc3QtMjoxMTExMjIyMjMzMzM6a2V5L2YxNTRiYTc5...'
+```
+```json
 {
     "KeyId": "arn:aws:kms:eu-west-2:111122223333:key/f154ba79-0b7d-4f19-9983-309f706ebc83",
     "Plaintext": "SGVsbG8="
 }
 ```
 ### Generating Asymmetric Keys in seed format
-The following shows 2 bash functions for generating keys to use as seeds. The keys are generated in PKCS8 format and 
-formatted for use in seed.yaml.
+Two bash functions for generating seed-format keys in PKCS8, formatted for `seed.yaml`.
 
-The linux packages `uuidgen` and `openssl` are required.
+Requires `uuidgen` and `openssl`.
 
 #### RSA Key Generation
 ```bash
@@ -535,7 +497,7 @@ $(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:${bits} -pkeyopt rsa_k
 "
 }
 ````
-This function can be sourced then executed with the commands below. The output can be pasted into the seed.yaml file.
+Source then run — output pastes into `seed.yaml`:
 ```bash
 rsakey 2048
 rsakey 3072
@@ -568,7 +530,7 @@ $(openssl ecparam -name ${curve} -genkey -noout | sed 's/^/          /')
 }
 ```
 
-This function can be sourced then executed with the commands below. The output can be pasted into the seed.yaml file.
+Source then run — output pastes into `seed.yaml`:
 ```bash
 ecckey secp256r1
 ecckey secp384r1
@@ -578,4 +540,4 @@ ecckey secp521r1
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License — see [LICENSE](LICENSE).

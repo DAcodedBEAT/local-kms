@@ -2,7 +2,7 @@ package handler
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/config"
 )
 
@@ -25,13 +25,6 @@ func (r *RequestHandler) GetKeyPolicy() Response {
 		return NewMissingParameterResponse(msg)
 	}
 
-	if body.PolicyName == nil {
-		msg := "1 validation error detected: Value null at 'policyName' failed to satisfy constraint: Member must not be null"
-
-		r.logger.Warnf(msg)
-		return NewValidationExceptionResponse(msg)
-	}
-
 	//---
 
 	keyArn := config.EnsureArn("key/", *body.KeyId)
@@ -51,6 +44,7 @@ func (r *RequestHandler) GetKeyPolicy() Response {
 	r.logger.Infof("Key policy returned: %s\n", key.GetArn())
 
 	return NewResponse(200, map[string]string{
-		"Policy": key.GetPolicy(),
+		"Policy":     key.GetPolicy(),
+		"PolicyName": "default",
 	})
 }

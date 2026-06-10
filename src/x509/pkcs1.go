@@ -112,7 +112,7 @@ func MarshalPKCS1PrivateKey(key *rsa.PrivateKey) []byte {
 	priv := pkcs1PrivateKey{
 		Version: version,
 		N:       key.N,
-		E:       key.PublicKey.E,
+		E:       key.E,
 		D:       key.D,
 		P:       key.Primes[0],
 		Q:       key.Primes[1],

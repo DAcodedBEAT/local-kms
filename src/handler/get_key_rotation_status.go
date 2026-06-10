@@ -2,7 +2,7 @@ package handler
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/cmk"
 	"github.com/nsmithuk/local-kms/src/config"
 )
@@ -28,42 +28,42 @@ func (r *RequestHandler) GetKeyRotationStatus() Response {
 
 	//---
 
-	keyArn := config.EnsureArn("key/", *body.KeyId)
-
-	// Lookup the key
-	key, _ := r.database.LoadKey(keyArn)
-
-	if key == nil {
-		msg := fmt.Sprintf("Key '%s' does not exist", keyArn)
-
-		r.logger.Warnf(msg)
-		return NewNotFoundExceptionResponse(msg)
+	key, response := r.getKey(*body.KeyId)
+	if !response.Empty() {
+		return response
 	}
 
 	//---
 
-	// Check the key supports rotation
+	// Only symmetric AWS_KMS keys support rotation
 	if key.GetMetadata().Origin == cmk.KeyOriginExternal {
 		msg := fmt.Sprintf("%s origin is EXTERNAL which is not valid for this operation.", key.GetArn())
-
 		r.logger.Warnf(msg)
 		return NewUnsupportedOperationException(msg)
 	}
 
-	if _, ok := key.(*cmk.AesKey); !ok {
-		r.logger.Warnf(fmt.Sprintf("Key '%s' does does not support rotation", keyArn))
-
-		// Hard code false for non-AES CMKs.
-		return NewResponse(200, map[string]bool{
-			"KeyRotationEnabled": false,
-		})
+	aesKey, ok := key.(*cmk.AesKey)
+	if !ok {
+		msg := fmt.Sprintf("Key '%s' does not support rotation", config.EnsureArn("key/", *body.KeyId))
+		r.logger.Warnf(msg)
+		return NewUnsupportedOperationException(msg)
 	}
 
 	//---
 
 	r.logger.Infof("Key rotation status returned: %s\n", key.GetArn())
 
-	return NewResponse(200, map[string]bool{
-		"KeyRotationEnabled": !key.(*cmk.AesKey).NextKeyRotation.IsZero(),
-	})
+	rotationEnabled := !aesKey.NextKeyRotation.IsZero()
+
+	resp := map[string]interface{}{
+		"KeyId":               key.GetArn(),
+		"KeyRotationEnabled":  rotationEnabled,
+		"RotationPeriodInDays": 365,
+	}
+
+	if rotationEnabled {
+		resp["NextRotationDate"] = float64(aesKey.NextKeyRotation.Unix())
+	}
+
+	return NewResponse(200, resp)
 }

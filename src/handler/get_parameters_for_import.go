@@ -6,10 +6,9 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
-	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/cmk"
 	"github.com/nsmithuk/local-kms/src/service"
 )
@@ -39,7 +38,7 @@ func (r *RequestHandler) GetParametersForImport() Response {
 		return NewMissingParameterResponse(msg)
 	}
 
-	if body.WrappingAlgorithm == nil {
+	if body.WrappingAlgorithm == "" {
 		msg := "WrappingAlgorithm is a required parameter"
 
 		r.logger.Warnf(msg)
@@ -47,18 +46,18 @@ func (r *RequestHandler) GetParametersForImport() Response {
 	}
 
 	var wrappingAlgorithm cmk.WrappingAlgorithm
-	switch *body.WrappingAlgorithm {
+	switch body.WrappingAlgorithm {
 	case "RSAES_PKCS1_V1_5", "RSAES_OAEP_SHA_1", "RSAES_OAEP_SHA_256":
-		wrappingAlgorithm = cmk.WrappingAlgorithm(*body.WrappingAlgorithm)
+		wrappingAlgorithm = cmk.WrappingAlgorithm(body.WrappingAlgorithm)
 
 	default:
-		msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'wrappingAlgorithm' failed to satisfy constraint: Member must satisfy enum value set: [RSAES_OAEP_SHA_1, RSAES_OAEP_SHA_256, RSAES_PKCS1_V1_5]", *body.WrappingAlgorithm)
+		msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'wrappingAlgorithm' failed to satisfy constraint: Member must satisfy enum value set: [RSAES_OAEP_SHA_1, RSAES_OAEP_SHA_256, RSAES_PKCS1_V1_5]", body.WrappingAlgorithm)
 
 		r.logger.Warnf(msg)
 		return NewValidationExceptionResponse(msg)
 	}
 
-	if body.WrappingKeySpec == nil {
+	if body.WrappingKeySpec == "" {
 		msg := "WrappingKeySpec is a required parameter"
 
 		r.logger.Warnf(msg)
@@ -67,8 +66,8 @@ func (r *RequestHandler) GetParametersForImport() Response {
 
 	// If wrapping key ever starts accepting additional values then we'll need to adjust this
 	var bits = 2048
-	if strings.Compare(*body.WrappingKeySpec, "RSA_2048") != 0 {
-		msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'wrappingKeySpec' failed to satisfy constraint: Member must satisfy enum value set: [RSA_2048]", *body.WrappingKeySpec)
+	if body.WrappingKeySpec != "RSA_2048" {
+		msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'wrappingKeySpec' failed to satisfy constraint: Member must satisfy enum value set: [RSA_2048]", body.WrappingKeySpec)
 
 		r.logger.Warnf(msg)
 		return NewValidationExceptionResponse(msg)

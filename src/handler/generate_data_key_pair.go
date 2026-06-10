@@ -7,7 +7,7 @@ import (
 	"crypto/rsa"
 	"fmt"
 
-	"github.com/aws/aws-sdk-go/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/nsmithuk/local-kms/src/cmk"
 	"github.com/nsmithuk/local-kms/src/x509"
@@ -54,7 +54,7 @@ func (r *RequestHandler) generateDataKeyPair() (Response, *GenerateDataKeyPairRe
 		return NewMissingParameterResponse(msg), nil
 	}
 
-	if body.KeyPairSpec == nil {
+	if body.KeyPairSpec == "" {
 		msg := "1 validation error detected: KeyPairSpec is required."
 
 		r.logger.Warnf(msg)
@@ -72,10 +72,10 @@ func (r *RequestHandler) generateDataKeyPair() (Response, *GenerateDataKeyPairRe
 
 	//----------------------------------
 
-	keyPairSpec := cmk.KeySpec(*body.KeyPairSpec)
+	keyPairSpec := cmk.KeySpec(body.KeyPairSpec)
 
-	var publicKey interface{}
-	var privateKey interface{}
+	var publicKey any
+	var privateKey any
 	//var err error
 
 	switch keyPairSpec {

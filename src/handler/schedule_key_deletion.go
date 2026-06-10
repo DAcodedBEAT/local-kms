@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aws/aws-sdk-go/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/cmk"
 	"github.com/nsmithuk/local-kms/src/config"
 )
@@ -28,12 +28,12 @@ func (r *RequestHandler) ScheduleKeyDeletion() Response {
 		return NewMissingParameterResponse(msg)
 	}
 
-	var PendingWindowInDays int64
+	var pendingWindowInDays int64
 
 	if body.PendingWindowInDays != nil {
-		PendingWindowInDays = *body.PendingWindowInDays
+		pendingWindowInDays = int64(*body.PendingWindowInDays)
 
-		if PendingWindowInDays < 7 || PendingWindowInDays > 30 {
+		if pendingWindowInDays < 7 || pendingWindowInDays > 30 {
 			msg := fmt.Sprintf("1 validation error detected: Value '%d' at 'PendingWindowInDays' failed to satisfy "+
 				"constraint: Member must have minimum value of 7 and maximum value of 30.", *body.PendingWindowInDays)
 
@@ -41,7 +41,7 @@ func (r *RequestHandler) ScheduleKeyDeletion() Response {
 			return NewValidationExceptionResponse(msg)
 		}
 	} else {
-		PendingWindowInDays = 30
+		pendingWindowInDays = 30
 	}
 
 	//---
@@ -60,8 +60,7 @@ func (r *RequestHandler) ScheduleKeyDeletion() Response {
 
 	//---
 
-	if key.GetMetadata().DeletionDate != 0 {
-		// Key is pending deletion; cannot re-schedule
+	if key.GetMetadata().KeyState == cmk.KeyStatePendingDeletion {
 		msg := fmt.Sprintf("%s is pending deletion.", target)
 
 		r.logger.Warnf(msg)
@@ -72,7 +71,7 @@ func (r *RequestHandler) ScheduleKeyDeletion() Response {
 
 	key.GetMetadata().Enabled = false
 	key.GetMetadata().KeyState = cmk.KeyStatePendingDeletion
-	key.GetMetadata().DeletionDate = time.Now().AddDate(0, 0, int(PendingWindowInDays)).Unix()
+	key.GetMetadata().DeletionDate = float64(time.Now().AddDate(0, 0, int(pendingWindowInDays)).UnixNano()) / 1e9
 
 	//--------------------------------
 	// Save the key
@@ -87,8 +86,10 @@ func (r *RequestHandler) ScheduleKeyDeletion() Response {
 
 	r.logger.Infof("Schedule key deletion: %s\n", key.GetArn())
 
-	return NewResponse(200, map[string]interface{}{
-		"KeyId":        key.GetArn(),
-		"DeletionDate": key.GetMetadata().DeletionDate,
+	return NewResponse(200, map[string]any{
+		"KeyId":               key.GetArn(),
+		"DeletionDate":        key.GetMetadata().DeletionDate,
+		"KeyState":            key.GetMetadata().KeyState,
+		"PendingWindowInDays": pendingWindowInDays,
 	})
 }

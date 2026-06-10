@@ -1,1 +1,1 @@
-from .helpers import validate_error_response
+from .helpers import assert_error_response

@@ -3,6 +3,7 @@ package data
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -12,12 +13,22 @@ import (
 )
 
 func (d *Database) SaveKey(k cmk.Key) error {
+	// Check available disk space before writing
+	if err := CheckDiskSpace(d.dbPath); err != nil {
+		return err
+	}
+
+	// Validate the key data before writing to prevent corruption
+	if err := ValidateKeyData(k); err != nil {
+		return err
+	}
+
 	encoded, err := json.Marshal(k)
 	if err != nil {
 		return err
 	}
 
-	return d.database.Put([]byte(k.GetArn()), encoded, nil)
+	return d.database.Put([]byte(k.GetArn()), encoded, syncWrite)
 }
 
 func (d *Database) LoadKey(arn string) (cmk.Key, error) {
@@ -32,25 +43,21 @@ func (d *Database) LoadKey(arn string) (cmk.Key, error) {
 
 	key, err := unmarshalKey(encoded)
 	if err != nil {
-		return nil, err
+		// Log the corruption error with the key ARN for debugging
+		return nil, fmt.Errorf("failed to unmarshal key at %s, possible data corruption: %w", arn, err)
 	}
 
 	//---
 
 	switch k := key.(type) {
 	case *cmk.AesKey:
-		// Rotate the key, if needed
 		if rotated := k.RotateIfNeeded(); rotated {
-			d.SaveKey(k)
+			if err := d.SaveKey(k); err != nil {
+				return nil, err
+			}
 		}
-
-		key = k
-	case *cmk.EccKey:
-		// This section/switch isn't really needed?
-		key = k
-	case *cmk.RsaKey:
-		// This section/switch isn't really needed?
-		key = k
+	case *cmk.EccKey, *cmk.RsaKey:
+		// no rotation needed
 	default:
 		return nil, errors.New("key type not supported")
 	}
@@ -64,19 +71,22 @@ func (d *Database) LoadKey(arn string) (cmk.Key, error) {
 
 	//---
 
-	// Delete key if it has expired
-	if key.GetMetadata().DeletionDate != 0 && key.GetMetadata().DeletionDate < time.Now().Unix() {
-		d.DeleteObject(arn)
+	if key.GetMetadata().IsPendingDeletion() {
+		if err := d.DeleteObject(arn); err != nil {
+			return nil, err
+		}
 		return nil, leveldb.ErrNotFound
 	}
 
 	// Reset key to pending import if key material has expired
-	if key.GetMetadata().ValidTo != 0 && key.GetMetadata().ValidTo < time.Now().Unix() {
+	if key.GetMetadata().ValidTo != 0 && key.GetMetadata().ValidTo < float64(time.Now().Unix()) {
 		key.GetMetadata().Enabled = false
 		key.GetMetadata().KeyState = cmk.KeyStatePendingImport
 		key.GetMetadata().ExpirationModel = ""
 		key.GetMetadata().ValidTo = 0
-		d.SaveKey(key)
+		if err := d.SaveKey(key); err != nil {
+			return nil, err
+		}
 	}
 
 	//---
@@ -114,12 +124,13 @@ func (d *Database) ListKeys(prefix string, limit int64, marker string) (keys []c
 
 		key, err := unmarshalKey(iter.Value())
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to unmarshal key at %s, possible data corruption: %w", string(iter.Key()), err)
 		}
 
-		// Delete key if it has expired
-		if key.GetMetadata().DeletionDate != 0 && key.GetMetadata().DeletionDate < time.Now().Unix() {
-			d.DeleteObject(key.GetArn())
+		if key.GetMetadata().IsPendingDeletion() {
+			if err := d.DeleteObject(key.GetArn()); err != nil {
+				continue
+			}
 			continue
 		}
 

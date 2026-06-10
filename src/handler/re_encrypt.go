@@ -2,7 +2,7 @@ package handler
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/cmk"
 	"github.com/nsmithuk/local-kms/src/service"
 )
@@ -41,14 +41,12 @@ func (r *RequestHandler) ReEncrypt() Response {
 		return NewValidationExceptionResponse(msg)
 	}
 
-	if body.SourceEncryptionAlgorithm == nil {
-		d := "SYMMETRIC_DEFAULT"
-		body.SourceEncryptionAlgorithm = &d
+	if body.SourceEncryptionAlgorithm == "" {
+		body.SourceEncryptionAlgorithm = "SYMMETRIC_DEFAULT"
 	}
 
-	if body.DestinationEncryptionAlgorithm == nil {
-		d := "SYMMETRIC_DEFAULT"
-		body.DestinationEncryptionAlgorithm = &d
+	if body.DestinationEncryptionAlgorithm == "" {
+		body.DestinationEncryptionAlgorithm = "SYMMETRIC_DEFAULT"
 	}
 
 	//--------------------------------
@@ -56,11 +54,22 @@ func (r *RequestHandler) ReEncrypt() Response {
 
 	keyArn, keySourceVersion, ciphertext, _ := service.UnpackCiphertextBlob(body.CiphertextBlob)
 
+	// If a SourceKeyId was provided, use it. Otherwise use the one from the blob.
+	if body.SourceKeyId != nil {
+		keyArn = *body.SourceKeyId
+	}
+
 	keySource, response := r.getUsableKey(keyArn)
 
 	// If the response is not empty, there was an error
 	if !response.Empty() {
 		return response
+	}
+
+	if keySource.GetMetadata().KeyUsage != cmk.UsageEncryptDecrypt {
+		msg := fmt.Sprintf("%s key usage is %s which is not valid for Decrypt (via ReEncrypt).", keySource.GetArn(), keySource.GetMetadata().KeyUsage)
+		r.logger.Warnf(msg)
+		return NewInvalidKeyUsageException(msg)
 	}
 
 	//---
@@ -78,8 +87,18 @@ func (r *RequestHandler) ReEncrypt() Response {
 			return NewInvalidCiphertextExceptionResponse("")
 		}
 
+	case *cmk.RsaKey:
+
+		plaintext, err = k.Decrypt(body.CiphertextBlob, cmk.EncryptionAlgorithm(body.SourceEncryptionAlgorithm))
+		if err != nil {
+			msg := fmt.Sprintf("Unable to decode Ciphertext: %s", err)
+			r.logger.Warnf(msg)
+
+			return NewInvalidCiphertextExceptionResponse("")
+		}
+
 	default:
-		return NewInternalFailureExceptionResponse("key type not yet supported for encryption")
+		return NewInternalFailureExceptionResponse("key type not yet supported for decryption")
 	}
 
 	//--------------------------------
@@ -92,6 +111,12 @@ func (r *RequestHandler) ReEncrypt() Response {
 		return response
 	}
 
+	if keyDestination.GetMetadata().KeyUsage != cmk.UsageEncryptDecrypt {
+		msg := fmt.Sprintf("%s key usage is %s which is not valid for ReEncrypt.", keyDestination.GetArn(), keyDestination.GetMetadata().KeyUsage)
+		r.logger.Warnf(msg)
+		return NewInvalidKeyUsageException(msg)
+	}
+
 	//---
 
 	var cipherResponse []byte
@@ -100,6 +125,14 @@ func (r *RequestHandler) ReEncrypt() Response {
 	case *cmk.AesKey:
 
 		cipherResponse, err = k.EncryptAndPackage(plaintext, body.DestinationEncryptionContext)
+		if err != nil {
+			r.logger.Error(err.Error())
+			return NewInternalFailureExceptionResponse(err.Error())
+		}
+
+	case *cmk.RsaKey:
+
+		cipherResponse, err = k.Encrypt(plaintext, cmk.EncryptionAlgorithm(body.DestinationEncryptionAlgorithm))
 		if err != nil {
 			r.logger.Error(err.Error())
 			return NewInternalFailureExceptionResponse(err.Error())
@@ -123,7 +156,7 @@ func (r *RequestHandler) ReEncrypt() Response {
 		KeyId:                          keyDestination.GetArn(),
 		SourceKeyId:                    keySource.GetArn(),
 		CiphertextBlob:                 cipherResponse,
-		SourceEncryptionAlgorithm:      cmk.EncryptionAlgorithm(*body.SourceEncryptionAlgorithm),
-		DestinationEncryptionAlgorithm: cmk.EncryptionAlgorithm(*body.DestinationEncryptionAlgorithm),
+		SourceEncryptionAlgorithm:      cmk.EncryptionAlgorithm(body.SourceEncryptionAlgorithm),
+		DestinationEncryptionAlgorithm: cmk.EncryptionAlgorithm(body.DestinationEncryptionAlgorithm),
 	})
 }
