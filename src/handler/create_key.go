@@ -5,7 +5,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	kmstypes "github.com/aws/aws-sdk-go-v2/service/kms/types"
-	"github.com/gofrs/uuid"
+	"github.com/google/uuid"
 	"github.com/nsmithuk/local-kms/src/cmk"
 	"github.com/nsmithuk/local-kms/src/config"
 )
@@ -21,7 +21,7 @@ func (r *RequestHandler) CreateKey() Response {
 
 	//---
 
-	keyId := uuid.Must(uuid.NewV4()).String()
+	keyId := uuid.NewString()
 
 	metadata := cmk.KeyMetadata{}
 	metadata.Initialize(keyId)

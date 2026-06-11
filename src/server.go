@@ -3,7 +3,7 @@ package src
 import (
 	"context"
 	"fmt"
-	"github.com/gofrs/uuid"
+	"github.com/google/uuid"
 	"github.com/nsmithuk/local-kms/src/config"
 	"github.com/nsmithuk/local-kms/src/data"
 	"github.com/nsmithuk/local-kms/src/handler"
@@ -72,7 +72,7 @@ func Run(ctx context.Context, port, seedPath string) {
 }
 
 func handleRequest(w http.ResponseWriter, r *http.Request, database *data.Database) {
-	requestId, _ := uuid.NewV4()
+	requestId, _ := uuid.NewRandom()
 	target := strings.Split(r.Header.Get("X-Amz-Target"), ".")
 	operation := ""
 	if len(target) >= 2 {
