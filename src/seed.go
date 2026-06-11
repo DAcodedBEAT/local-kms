@@ -6,7 +6,7 @@ import (
 	"github.com/nsmithuk/local-kms/src/config"
 	"github.com/nsmithuk/local-kms/src/data"
 	"github.com/syndtr/goleveldb/leveldb"
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v4"
 	"os"
 	"path/filepath"
 )

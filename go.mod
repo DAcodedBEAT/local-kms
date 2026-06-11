@@ -7,8 +7,8 @@ require (
 	github.com/btcsuite/btcd/btcec/v2 v2.5.0
 	github.com/google/uuid v1.6.0
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
+	go.yaml.in/yaml/v4 v4.0.0-rc.5
 	golang.org/x/sys v0.46.0
-	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
@@ -19,4 +19,5 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
 	golang.org/x/net v0.7.0 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
