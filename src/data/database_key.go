@@ -53,6 +53,12 @@ func (d *Database) LoadKey(arn string) (cmk.Key, error) {
 		}
 	case *cmk.EccKey, *cmk.RsaKey:
 		// no rotation needed
+	case *cmk.HmacKey:
+		if rotated := k.RotateIfNeeded(); rotated {
+			if err := d.SaveKey(k); err != nil {
+				return nil, err
+			}
+		}
 	default:
 		return nil, errors.New("key type not supported")
 	}
@@ -174,6 +180,8 @@ func unmarshalKey(encoded []byte) (cmk.Key, error) {
 		key = new(cmk.EccKey)
 	case cmk.TypeRsa:
 		key = new(cmk.RsaKey)
+	case cmk.TypeHmac:
+		key = new(cmk.HmacKey)
 	default:
 		return nil, errors.New("key type not yet supported")
 	}

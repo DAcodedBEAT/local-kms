@@ -36,7 +36,8 @@ func seed(ctx context.Context, path string, database *data.Database) {
 	//---
 
 	type InputSymmetric struct {
-		Aes []cmk.AesKey `yaml:"Aes"`
+		Aes  []cmk.AesKey  `yaml:"Aes"`
+		Hmac []cmk.HmacKey `yaml:"Hmac"`
 	}
 	type InputAsymmetric struct {
 		Rsa []cmk.RsaKey `yaml:"Rsa"`
@@ -58,6 +59,7 @@ func seed(ctx context.Context, path string, database *data.Database) {
 	var eccKeys []cmk.EccKey
 	var rsaKeys []cmk.RsaKey
 	var aesKeys []cmk.AesKey
+	var hmacKeys []cmk.HmacKey
 	var aliases []data.Alias
 
 	err = yaml.Unmarshal(fileContent, &seed)
@@ -94,6 +96,7 @@ func seed(ctx context.Context, path string, database *data.Database) {
 
 	} else {
 		aesKeys = append(aesKeys, seed.Keys.Symmetric.Aes...)
+		hmacKeys = append(hmacKeys, seed.Keys.Symmetric.Hmac...)
 		rsaKeys = append(rsaKeys, seed.Keys.Asymmetric.Rsa...)
 		eccKeys = append(eccKeys, seed.Keys.Asymmetric.Ecc...)
 		aliases = append(aliases, seed.Aliases...)
@@ -110,6 +113,15 @@ func seed(ctx context.Context, path string, database *data.Database) {
 
 	keysAdded := 0
 	for _, key := range aesKeys {
+		if keyIsNew(ctx, database, &key.Metadata) {
+			if err := database.SaveKey(&key); err != nil {
+				logger.WarnContext(ctx, "Failed to save key", "keyId", key.GetMetadata().KeyId, "error", err)
+				continue
+			}
+			keysAdded++
+		}
+	}
+	for _, key := range hmacKeys {
 		if keyIsNew(ctx, database, &key.Metadata) {
 			if err := database.SaveKey(&key); err != nil {
 				logger.WarnContext(ctx, "Failed to save key", "keyId", key.GetMetadata().KeyId, "error", err)

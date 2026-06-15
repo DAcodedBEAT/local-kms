@@ -14,6 +14,7 @@ _Uses real encryption ([AES](https://golang.org/pkg/crypto/aes/), [ECDSA](https:
 ### Supports
 
 * Symmetric (AES) keys
+* HMAC keys (`HMAC_224`, `HMAC_256`, `HMAC_384`, `HMAC_512`)
 * Asymmetric keys (ECC and RSA)
 * Customer Master Key management:
     * Enable/disable keys
@@ -29,6 +30,7 @@ _Uses real encryption ([AES](https://golang.org/pkg/crypto/aes/), [ECDSA](https:
 * Custom key material import
 * Sign/verify messages
     * RAW and DIGEST
+* MAC generation and verification (`GenerateMac`, `VerifyMac`) using HMAC keys
 * Tags
 * Key Policies: Get & Put
 
@@ -40,8 +42,6 @@ Existing keys in seeding file not overwritten or amended.
 ### Does not (yet) support
 
 * Grants (`CreateGrant`, `ListGrants`, `RevokeGrant`, `RetireGrant`, `ListRetirableGrants`)
-* HMAC keys (`HMAC_224`, `HMAC_256`, `HMAC_384`, `HMAC_512` key specs)
-* HMAC operations (`GenerateMac`, `VerifyMac`)
 * On-demand key rotation (`RotateKeyOnDemand`, `ListKeyRotations`)
 * Multi-region keys (`MultiRegion: true`, `mrk-` key ID prefix, `ReplicateKey`, `UpdatePrimaryRegion`)
 * `ListKeyPolicies`

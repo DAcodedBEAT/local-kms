@@ -180,11 +180,32 @@ func (r *RequestHandler) CreateKey() Response {
 			return NewInternalFailureExceptionResponse(err.Error())
 		}
 
+	case "HMAC_224", "HMAC_256", "HMAC_384", "HMAC_512":
+
+		if body.KeyUsage == "" {
+			msg := "You must specify a KeyUsage value for an HMAC CMK."
+			r.logger.WarnContext(r.request.Context(), "missing key usage for HMAC", "keySpec", body.KeySpec)
+			return NewValidationExceptionResponse(msg)
+		}
+
+		if cmk.KeyUsage(body.KeyUsage) != cmk.UsageGenerateVerifyMac {
+			msg := fmt.Sprintf("KeyUsage %s is not compatible with KeySpec %s", body.KeyUsage, body.KeySpec)
+			r.logger.WarnContext(r.request.Context(), "invalid key usage", "keyUsage", body.KeyUsage, "keySpec", body.KeySpec)
+			return NewValidationExceptionResponse(msg)
+		}
+
+		key, err = cmk.NewHmacKey(cmk.KeySpec(body.KeySpec), metadata, *body.Policy, metadata.Origin)
+		if err != nil {
+			r.logger.ErrorContext(r.request.Context(), "internal error", "error", err)
+			return NewInternalFailureExceptionResponse(err.Error())
+		}
+
 	default:
 
 		msg := fmt.Sprintf("1 validation error detected: Value '%s' at 'KeySpec' "+
 			"failed to satisfy constraint: Member must satisfy enum value set: [RSA_2048, ECC_NIST_P384, "+
-			"ECC_NIST_P256, ECC_NIST_P521, RSA_3072, ECC_SECG_P256K1, RSA_4096, SYMMETRIC_DEFAULT]", body.KeySpec)
+			"ECC_NIST_P256, ECC_NIST_P521, RSA_3072, ECC_SECG_P256K1, RSA_4096, SYMMETRIC_DEFAULT, "+
+			"HMAC_224, HMAC_256, HMAC_384, HMAC_512]", body.KeySpec)
 
 		r.logger.WarnContext(r.request.Context(), "invalid key spec", "keySpec", body.KeySpec)
 
