@@ -3,6 +3,7 @@ package src
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"reflect"
@@ -60,27 +61,40 @@ func Run(ctx context.Context, port, seedPath string) {
 	})
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		handleRequest(w, r, database)
+		HandleRequest(w, r, database)
 	})
 
 	logger.InfoContext(ctx, "Data storage path", "path", config.DatabasePath)
-	logger.InfoContext(ctx, "Local KMS started", "addr", "0.0.0.0:"+port)
+
+	addr := ":" + port
+
+	// Bind the listener explicitly so port-binding failures surface before we
+	// log "started", and so PORT=0 (useful in CI) resolves to the real port.
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		logger.ErrorContext(ctx, "Failed to bind", "addr", addr, "error", err)
+		os.Exit(1)
+	}
+
+	parts := strings.Split(ln.Addr().String(), ":")
+	resolvedPort := parts[len(parts)-1]
+	logger.InfoContext(ctx, "Local KMS started", "addr", "0.0.0.0:"+resolvedPort)
 
 	srv := &http.Server{
-		Addr:              ":" + port,
+		Addr:              addr,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
-	if err := srv.ListenAndServe(); err != nil {
+	if err := srv.Serve(ln); err != nil {
 		logger.ErrorContext(ctx, "Server failed", "error", err)
 		os.Exit(1)
 	}
 
 }
 
-func handleRequest(w http.ResponseWriter, r *http.Request, database *data.Database) {
+func HandleRequest(w http.ResponseWriter, r *http.Request, database *data.Database) {
 	requestId, _ := uuid.NewRandom()
 	target := strings.Split(r.Header.Get("X-Amz-Target"), ".")
 	operation := ""
