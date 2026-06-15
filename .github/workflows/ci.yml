@@ -165,10 +165,12 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
-      - name: Create GitHub Release
+      - name: Attach binaries to release
+        # Release is created by release-please on Release-PR merge. This step
+        # only uploads built binaries to that existing release; it must not
+        # overwrite the changelog body or title.
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
           files: artifacts/*.bin
-          generate_release_notes: true
+          fail_on_unmatched_files: true
