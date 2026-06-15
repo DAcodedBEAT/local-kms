@@ -2,6 +2,8 @@
 
 "unable to decode ciphertext" or data corruption errors — follow this guide.
 
+> **Note:** the `recovery` binary is a **temporary** workaround for goleveldb corruption issues seen under disk pressure. It will be removed once the datastore migrates to Pebble (see [`docs/next-steps/migrate-goleveldb-to-pebble.md`](docs/next-steps/migrate-goleveldb-to-pebble.md)). Treat it as transitional tooling — don't build long-lived workflows around it.
+
 ## Symptoms
 
 - `WARN[...] Unable to decode Ciphertext: cipher: message authentication failed`
@@ -137,7 +139,7 @@ Should output:
 
 ## Getting Help
 
-Check [GitHub Issues](https://github.com/nsmithuk/local-kms/issues) or file bug with local-kms version, log snippets, disk space at failure time.
+Check [GitHub Issues](https://github.com/DAcodedBEAT/local-kms/issues) or file bug with local-kms version, log snippets, disk space at failure time.
 
 ## Related Documentation
 

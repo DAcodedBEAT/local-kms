@@ -143,7 +143,7 @@ func (r *RequestHandler) ImportKeyMaterial() Response {
 		return NewExpiredImportTokenExceptionResponse()
 	}
 
-	// Attempt to decrypt the encyrpted key material
+	// Attempt to decrypt the encrypted key material
 	var decrypterOps crypto.DecrypterOpts
 	switch params.WrappingAlgorithm {
 	case cmk.WrappingAlgorithmOaepSha1:
@@ -151,6 +151,7 @@ func (r *RequestHandler) ImportKeyMaterial() Response {
 	case cmk.WrappingAlgorithmOaepSh256:
 		decrypterOps = &rsa.OAEPOptions{Hash: crypto.SHA256}
 	case cmk.WrappingAlgorithmPkcs1V15:
+		//nolint:staticcheck // SA1019: RSAES_PKCS1_V1_5 wrapping is part of the AWS KMS spec; must remain supported.
 		decrypterOps = &rsa.PKCS1v15DecryptOptions{}
 	}
 

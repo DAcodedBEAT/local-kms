@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/base64"
 	"fmt"
+
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/cmk"
 	"github.com/nsmithuk/local-kms/src/service"

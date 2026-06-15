@@ -10,9 +10,10 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/btcsuite/btcd/btcec/v2"
 	"math/big"
 	"slices"
+
+	"github.com/btcsuite/btcd/btcec/v2"
 )
 
 // We create our own type to manage JSON Marshaling

@@ -54,7 +54,7 @@ func main() {
 		return
 	}
 
-	slog.WarnContext(ctx, "Found corruption", 
+	slog.WarnContext(ctx, "Found corruption",
 		"corrupted_keys", report.CorruptedKeys,
 		"corrupted_aliases", report.CorruptedAliases,
 		"corrupted_tags", report.CorruptedTags,

@@ -3,14 +3,16 @@ package src
 import (
 	"context"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/nsmithuk/local-kms/src/config"
-	"github.com/nsmithuk/local-kms/src/data"
-	"github.com/nsmithuk/local-kms/src/handler"
 	"net/http"
 	"os"
 	"reflect"
 	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/nsmithuk/local-kms/src/config"
+	"github.com/nsmithuk/local-kms/src/data"
+	"github.com/nsmithuk/local-kms/src/handler"
 )
 
 func Run(ctx context.Context, port, seedPath string) {
@@ -64,7 +66,14 @@ func Run(ctx context.Context, port, seedPath string) {
 	logger.InfoContext(ctx, "Data storage path", "path", config.DatabasePath)
 	logger.InfoContext(ctx, "Local KMS started", "addr", "0.0.0.0:"+port)
 
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
+	srv := &http.Server{
+		Addr:              ":" + port,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	if err := srv.ListenAndServe(); err != nil {
 		logger.ErrorContext(ctx, "Server failed", "error", err)
 		os.Exit(1)
 	}
@@ -130,6 +139,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request, database *data.Databa
 		// If we couldn't find a valid method matching the request
 		logger.WarnContext(ctx, "unimplemented operation", "target", r.Header.Get("X-Amz-Target"))
 		w.WriteHeader(501)
+		// #nosec G705 -- local mock; response is plain text, not HTML.
 		_, _ = fmt.Fprintf(w, "Passed X-Amz-Target (%s) is not implemented", r.Header.Get("X-Amz-Target"))
 		return
 	}

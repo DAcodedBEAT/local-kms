@@ -5,12 +5,14 @@ import (
 	"crypto/cipher"
 	"encoding/binary"
 	"errors"
-	"github.com/nsmithuk/local-kms/src/service"
 	"sort"
+
+	"github.com/nsmithuk/local-kms/src/service"
 )
 
 func (k *AesKey) Decrypt(version uint32, ciphertext []byte, context map[string]string) (plaintext []byte, err error) {
 
+	// #nosec G115 -- len(BackingKeys) is the rotation count, bounded well under math.MaxUint32.
 	if version >= uint32(len(k.BackingKeys)) {
 		err = errors.New("required version of backing key is invalid")
 		return
@@ -76,10 +78,15 @@ func (k *AesKey) EncryptAndPackage(plaintext []byte, context map[string]string) 
 	*/
 
 	identBytes := []byte(k.GetArn())
+	if len(identBytes) > 255 {
+		return nil, errors.New("key ARN exceeds 255 bytes; cannot fit ciphertext header")
+	}
 
 	v := make([]byte, 4)
+	// #nosec G115 -- keyVersion = len(BackingKeys)-1, bounded well under math.MaxUint32.
 	binary.LittleEndian.PutUint32(v, uint32(keyVersion))
 
+	// #nosec G115 -- bounded by the len(identBytes) > 255 check above.
 	result = []byte{byte(len(identBytes))}
 	result = append(result, identBytes...)
 	result = append(result, v...)
@@ -100,6 +107,7 @@ func (k *AesKey) encrypt(key [32]byte, plaintext []byte, context map[string]stri
 		return
 	}
 
+	// #nosec G115 -- GCM nonce size is the constant 12 bytes.
 	nonce := service.GenerateRandomData(uint16(aesgcm.NonceSize()))
 
 	additionalDate := prepareAesEncryptionContext(context)
@@ -111,8 +119,10 @@ func (k *AesKey) encrypt(key [32]byte, plaintext []byte, context map[string]stri
 	return
 }
 
-/**
+/*
+*
 We prep this Encryption Context / Additional Data as per:
+
 	https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#encrypt_context
 
 	NB: Only the order of the encryption context pairs can vary. Everything else must be identical.

@@ -48,7 +48,7 @@ func (r *RequestHandler) CreateAlias() Response {
 	}
 
 	if strings.HasPrefix(*body.AliasName, "alias/aws/") {
-		msg := fmt.Sprintf("The alias namespace \"alias/aws/\" is reserved for AWS managed keys and cannot be used for customer managed keys.")
+		msg := "The alias namespace \"alias/aws/\" is reserved for AWS managed keys and cannot be used for customer managed keys."
 		r.logger.WarnContext(r.request.Context(), "validation failed", "aliasName", *body.AliasName)
 		return NewNotAuthorizedExceptionResponse(msg)
 	}

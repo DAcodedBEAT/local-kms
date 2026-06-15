@@ -72,21 +72,35 @@ AWS returns deletion timestamp in scientific notation (e.g. `1.5565824E9`). Loca
 
 ## Download
 
-Pre-built binaries:
-* [local-kms_darwin-amd64.bin](https://local-kms.s3.eu-west-2.amazonaws.com/3/local-kms_darwin-amd64.bin)
-* [local-kms_linux-amd64.bin](https://local-kms.s3.eu-west-2.amazonaws.com/3/local-kms_linux-amd64.bin)
-* [local-kms_linux-arm64.bin](https://local-kms.s3.eu-west-2.amazonaws.com/3/local-kms_linux-arm64.bin)
-* [local-kms_linux-amd64-alpine.bin](https://local-kms.s3.eu-west-2.amazonaws.com/3/local-kms_linux-amd64-alpine.bin)
-* [local-kms_linux-arm64-alpine.bin](https://local-kms.s3.eu-west-2.amazonaws.com/3/local-kms_linux-arm64-alpine.bin)
+Pre-built binaries from [GitHub Releases](https://github.com/DAcodedBEAT/local-kms/releases/latest). Static (CGO disabled) — Linux binaries run on glibc and musl/Alpine alike:
 
+* `local-kms_darwin-amd64.bin` / `recovery_darwin-amd64.bin`
+* `local-kms_darwin-arm64.bin` / `recovery_darwin-arm64.bin`
+* `local-kms_linux-amd64.bin`  / `recovery_linux-amd64.bin`
+* `local-kms_linux-arm64.bin`  / `recovery_linux-arm64.bin`
+
+> `recovery_*` is a transitional utility for repairing goleveldb corruption. Slated for removal once the datastore migration to Pebble lands (see [`docs/next-steps/migrate-goleveldb-to-pebble.md`](docs/next-steps/migrate-goleveldb-to-pebble.md)).
+
+Direct download (latest):
+```sh
+curl -L -o local-kms \
+  https://github.com/DAcodedBEAT/local-kms/releases/latest/download/local-kms_linux-amd64.bin
+chmod +x local-kms
+```
 
 ## Getting Started with Docker
 
-Images on [Docker Hub](https://hub.docker.com/r/nsmithuk/local-kms) and [AWS Public ECR](https://gallery.ecr.aws/nsmithuk/local-kms).
+Images published to [GitHub Container Registry](https://github.com/DAcodedBEAT/local-kms/pkgs/container/local-kms): `ghcr.io/dacodedbeat/local-kms`. Multi-arch (amd64, arm64).
+
+Tags:
+- `latest` — tip of `master`
+- `X.Y.Z` — specific semver release
+- `X` — latest within major version
+- `sha-<short>` — exact commit
 
 Quickest start — LKMS up on port 8080:
 ```
-docker run -p 8080:8080 nsmithuk/local-kms
+docker run -p 8080:8080 ghcr.io/dacodedbeat/local-kms
 ```
 
 ### Seeding and Docker
@@ -95,7 +109,7 @@ LKMS checks for seeding file at `/init/seed.yaml` by default. Simplest approach:
 ```
 docker run -p 8080:8080 \
 --mount type=bind,source="$(pwd)"/init,target=/init \
-nsmithuk/local-kms
+ghcr.io/dacodedbeat/local-kms
 ```
 
 ### Persisting data and Docker
@@ -103,7 +117,7 @@ Docker stores data in `/data/` by default. To persist between runs, mount `/data
 ```
 docker run -p 8080:8080 \
 --mount type=bind,source="$(pwd)"/data,target=/data \
-nsmithuk/local-kms
+ghcr.io/dacodedbeat/local-kms
 ```
 
 ## Seeding file format
@@ -280,7 +294,7 @@ Tested with Go 1.26
 #### Using git and make (recommended)
 
 ```sh
-git clone https://github.com/nsmithuk/local-kms.git
+git clone https://github.com/DAcodedBEAT/local-kms.git
 cd local-kms
 make build
 ```
@@ -290,7 +304,7 @@ Binary created as `./local-kms`
 #### Using Go directly
 
 ```sh
-git clone https://github.com/nsmithuk/local-kms.git
+git clone https://github.com/DAcodedBEAT/local-kms.git
 cd local-kms
 go build -o local-kms ./cmd/local-kms
 ```

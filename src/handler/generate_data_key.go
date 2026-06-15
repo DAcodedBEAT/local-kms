@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/cmk"
 	"github.com/nsmithuk/local-kms/src/service"
@@ -93,6 +94,7 @@ func (r *RequestHandler) generateDataKey() (Response, *GenerateDataKeyResponse) 
 		}
 
 	} else {
+		// #nosec G115 -- NumberOfBytes validated above to be in [1, 1024], fits uint16.
 		bytesRequired = uint16(*body.NumberOfBytes)
 	}
 

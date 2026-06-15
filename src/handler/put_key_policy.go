@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/config"
 )
@@ -9,7 +10,9 @@ import (
 func (r *RequestHandler) PutKeyPolicy() Response {
 
 	var body *kms.PutKeyPolicyInput
-	err := r.decodeBodyInto(&body)
+	if err := r.decodeBodyInto(&body); err != nil {
+		body = &kms.PutKeyPolicyInput{}
+	}
 
 	//--------------------------------
 	// Validation
@@ -63,7 +66,7 @@ func (r *RequestHandler) PutKeyPolicy() Response {
 	//--------------------------------
 	// Save the key
 
-	err = r.database.SaveKey(key)
+	err := r.database.SaveKey(key)
 	if err != nil {
 		r.logger.ErrorContext(r.request.Context(), "internal error", "error", err)
 		return NewInternalFailureExceptionResponse(err.Error())

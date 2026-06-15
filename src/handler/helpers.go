@@ -11,7 +11,7 @@ import (
 )
 
 /*
-	Finds a key for a given key or alias name or ARN
+Finds a key for a given key or alias name or ARN
 */
 func (r *RequestHandler) getKey(keyId string) (cmk.Key, Response) {
 
@@ -49,8 +49,8 @@ func (r *RequestHandler) getKey(keyId string) (cmk.Key, Response) {
 }
 
 /*
-	Finds a key for a given key or alias name or ARN
-	And confirms that it's available to use for cryptographic operations.
+Finds a key for a given key or alias name or ARN
+And confirms that it's available to use for cryptographic operations.
 */
 func (r *RequestHandler) getUsableKey(keyId string) (cmk.Key, Response) {
 

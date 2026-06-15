@@ -3,6 +3,7 @@ package handler
 import (
 	"crypto/ecdsa"
 	"fmt"
+
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/cmk"
 	"github.com/nsmithuk/local-kms/src/x509"
@@ -67,16 +68,16 @@ func (r *RequestHandler) GetPublicKey() Response {
 		CustomerMasterKeySpec cmk.KeySpec
 		KeySpec               cmk.KeySpec
 		EncryptionAlgorithms  []cmk.EncryptionAlgorithm `json:",omitempty"`
-		SigningAlgorithms      []cmk.SigningAlgorithm    `json:",omitempty"`
-		KeyUsage               cmk.KeyUsage
-		PublicKey              []byte
+		SigningAlgorithms     []cmk.SigningAlgorithm    `json:",omitempty"`
+		KeyUsage              cmk.KeyUsage
+		PublicKey             []byte
 	}{
 		KeyId:                 key.GetArn(),
 		CustomerMasterKeySpec: key.GetMetadata().CustomerMasterKeySpec,
 		KeySpec:               key.GetMetadata().KeySpec,
 		EncryptionAlgorithms:  key.GetMetadata().EncryptionAlgorithms,
-		SigningAlgorithms:      key.GetMetadata().SigningAlgorithms,
-		KeyUsage:               key.GetMetadata().KeyUsage,
-		PublicKey:              publicKey,
+		SigningAlgorithms:     key.GetMetadata().SigningAlgorithms,
+		KeyUsage:              key.GetMetadata().KeyUsage,
+		PublicKey:             publicKey,
 	})
 }

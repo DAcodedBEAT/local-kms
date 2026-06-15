@@ -1,0 +1,50 @@
+name: lint
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: go-quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt check
+        run: |
+          out=$(gofmt -l -s .)
+          if [ -n "$out" ]; then
+            echo "Unformatted files:"; echo "$out"
+            exit 1
+          fi
+
+      - name: goimports check
+        run: |
+          out=$(go tool goimports -l .)
+          if [ -n "$out" ]; then
+            echo "Files with import issues:"; echo "$out"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m
+
+      - name: govulncheck
+        run: go tool govulncheck ./...

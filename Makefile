@@ -1,43 +1,88 @@
-.PHONY: help build build-recovery dev dev-down test test-down clean
+.DEFAULT_GOAL := help
+SHELL := bash
 
-help:
-	@echo "Local KMS - Available Commands"
-	@echo ""
-	@echo "Development:"
-	@echo "  make dev             Start KMS in development mode (with live reload)"
-	@echo "  make dev-down        Stop development environment"
-	@echo ""
-	@echo "Testing:"
-	@echo "  make test            Run functional tests in Docker"
-	@echo "  make test-down       Stop test environment"
-	@echo ""
-	@echo "Building:"
-	@echo "  make build           Build the KMS binary"
-	@echo "  make build-recovery  Build the recovery utility (for corruption recovery)"
-	@echo ""
-	@echo "Cleanup:"
-	@echo "  make clean           Remove containers, volumes, and binaries"
-	@echo ""
+BINARY      := local-kms
+RECOVERY    := recovery
+PKG_MAIN    := ./cmd/local-kms
+PKG_RECOV   := ./cmd/recovery
+VERSION     ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+GIT_COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+LDFLAGS     := -s -w -X 'main.Version=$(VERSION)' -X 'main.GitCommit=$(GIT_COMMIT)'
 
-build:
-	go build -o local-kms ./cmd/local-kms
+IMAGE       ?= local-kms
+COMPOSE     := docker compose
+COMPOSE_TEST := $(COMPOSE) -f docker-compose.test.yml
 
-build-recovery:
-	go build -o recovery ./cmd/recovery
+.PHONY: help
+help: ## Show this help
+	@awk 'BEGIN{FS=":.*##"; printf "Usage: make <target>\n\nTargets:\n"} \
+	  /^[a-zA-Z0-9_.-]+:.*##/ {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-dev:
-	docker-compose up
+## ---- Build ----
+.PHONY: build
+build: ## Build the local-kms binary
+	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o $(BINARY) $(PKG_MAIN)
 
-dev-down:
-	docker-compose down
+.PHONY: build-recovery
+build-recovery: ## Build the recovery utility
+	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o $(RECOVERY) $(PKG_RECOV)
 
-test:
-	@./run-tests.sh
+.PHONY: docker-build
+docker-build: ## Build the production Docker image (tag: local-kms:dev)
+	docker build \
+	  --build-arg VERSION=$(VERSION) \
+	  --build-arg GIT_COMMIT=$(GIT_COMMIT) \
+	  -t $(IMAGE):dev .
 
-test-down:
-	docker-compose -f docker-compose.test.yml down --remove-orphans
+## ---- Dev ----
+.PHONY: dev
+dev: ## Start local-kms in dev mode with live reload
+	$(COMPOSE) up
 
-clean:
-	docker-compose down --volumes --remove-orphans
-	docker-compose -f docker-compose.test.yml down --volumes --remove-orphans
-	rm -f local-kms recovery
+.PHONY: dev-down
+dev-down: ## Stop dev environment
+	$(COMPOSE) down
+
+## ---- Quality ----
+.PHONY: fmt
+fmt: ## Format Go sources (gofmt + goimports)
+	gofmt -s -w .
+	go tool goimports -w .
+
+.PHONY: vet
+vet: ## Run go vet
+	go vet ./...
+
+.PHONY: vuln
+vuln: ## Run govulncheck
+	go tool govulncheck ./...
+
+.PHONY: lint
+lint: ## Run golangci-lint (installs locally if missing via official action in CI)
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+	  golangci-lint run --timeout=5m; \
+	else \
+	  echo "golangci-lint not installed. Install: https://golangci-lint.run/usage/install/"; \
+	  exit 1; \
+	fi
+
+.PHONY: tidy
+tidy: ## Tidy go.mod
+	go mod tidy
+
+## ---- Tests ----
+.PHONY: test
+test: ## Run functional tests via docker compose
+	$(COMPOSE_TEST) up --build --abort-on-container-exit --remove-orphans --exit-code-from test
+	$(COMPOSE_TEST) down --remove-orphans
+
+.PHONY: test-down
+test-down: ## Stop test environment
+	$(COMPOSE_TEST) down --remove-orphans
+
+## ---- Cleanup ----
+.PHONY: clean
+clean: ## Remove containers, volumes, built binaries
+	-$(COMPOSE) down --volumes --remove-orphans
+	-$(COMPOSE_TEST) down --volumes --remove-orphans
+	rm -f $(BINARY) $(RECOVERY)

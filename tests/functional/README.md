@@ -17,11 +17,6 @@ on just the element we're currently testing.
 Run all tests in Docker with one command from the repository root:
 
 ```bash
-./run-tests.sh
-```
-
-Or using Make:
-```bash
 make test
 ```
 
@@ -42,11 +37,11 @@ From within the `tests/functional` directory:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirments.txt
+pip install -r requirements.txt
 
 # Start KMS in another terminal
 cd ../..
-docker-compose up
+docker compose up
 
 # Back in tests/functional, run tests
 export KMS_URL=http://localhost:4599
@@ -65,7 +60,7 @@ docker run -it --rm -v "${PWD}:/app" -w "/app" \
 -e AWS_SESSION_TOKEN \
 python:3-slim bash
 
-pip install -r requirments.txt
+pip install -r requirements.txt
 export KMS_URL="http://host.docker.internal:4599"
 pytest
 ```

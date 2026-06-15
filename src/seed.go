@@ -2,13 +2,14 @@ package src
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+
 	"github.com/nsmithuk/local-kms/src/cmk"
 	"github.com/nsmithuk/local-kms/src/config"
 	"github.com/nsmithuk/local-kms/src/data"
 	"github.com/syndtr/goleveldb/leveldb"
 	"go.yaml.in/yaml/v4"
-	"os"
-	"path/filepath"
 )
 
 func seed(ctx context.Context, path string, database *data.Database) {
@@ -25,6 +26,7 @@ func seed(ctx context.Context, path string, database *data.Database) {
 		return
 	}
 
+	// #nosec G304 -- seed file path comes from operator config (KMS_SEED_PATH), not user input.
 	fileContent, err := os.ReadFile(path)
 	if err != nil {
 		logger.ErrorContext(ctx, "Unable to read seed file", "path", path, "error", err)

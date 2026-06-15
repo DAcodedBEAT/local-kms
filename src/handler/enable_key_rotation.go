@@ -2,10 +2,11 @@ package handler
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/cmk"
 	"github.com/nsmithuk/local-kms/src/config"
-	"time"
 )
 
 func (r *RequestHandler) EnableKeyRotation() Response {

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/nsmithuk/local-kms/src/cmk"
 	"github.com/nsmithuk/local-kms/src/config"
@@ -55,9 +56,9 @@ func (r *RequestHandler) GetKeyRotationStatus() Response {
 
 	rotationEnabled := !aesKey.NextKeyRotation.IsZero()
 
-	resp := map[string]interface{}{
-		"KeyId":               key.GetArn(),
-		"KeyRotationEnabled":  rotationEnabled,
+	resp := map[string]any{
+		"KeyId":                key.GetArn(),
+		"KeyRotationEnabled":   rotationEnabled,
 		"RotationPeriodInDays": 365,
 	}
 

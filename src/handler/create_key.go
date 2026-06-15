@@ -71,14 +71,19 @@ func (r *RequestHandler) CreateKey() Response {
 		body.Policy = &policy
 	}
 
+	// CustomerMasterKeySpec is deprecated upstream but still accepted by AWS KMS for backwards compatibility.
+	// Local KMS preserves that compatibility, so we read the field intentionally.
+	//nolint:staticcheck // SA1019: accept deprecated AWS input field for compatibility
 	if body.KeySpec != "" && body.CustomerMasterKeySpec != "" {
 		// Both values cannot be set
 
 		msg := "You cannot specify KeySpec and CustomerMasterKeySpec in the same request. CustomerMasterKeySpec is deprecated."
 		r.logger.WarnContext(r.request.Context(), "validation failed", "error", "both KeySpec and CustomerMasterKeySpec specified")
 		return NewValidationExceptionResponse(msg)
+		//nolint:staticcheck // SA1019: accept deprecated AWS input field for compatibility
 	} else if body.KeySpec == "" && body.CustomerMasterKeySpec != "" {
 		// If we only have CustomerMasterKeySpec, copy it over to KeySpec
+		//nolint:staticcheck // SA1019: accept deprecated AWS input field for compatibility
 		body.KeySpec = kmstypes.KeySpec(body.CustomerMasterKeySpec)
 
 	} else if body.KeySpec == "" {

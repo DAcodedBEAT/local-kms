@@ -3,6 +3,7 @@ package data
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 

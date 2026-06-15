@@ -3,7 +3,7 @@ package cmk
 import (
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha1"
+	"crypto/sha1" // #nosec G505 -- AWS KMS spec defines RSAES_OAEP_SHA_1 wrapping; required for input compatibility.
 	"crypto/sha256"
 	"errors"
 	"hash"
@@ -13,7 +13,7 @@ func (k *RsaKey) Encrypt(plaintext []byte, algorithm EncryptionAlgorithm) (resul
 	var hashAlgorithm hash.Hash
 	switch algorithm {
 	case EncryptionAlgorithmRsaOaepSha1:
-		hashAlgorithm = sha1.New()
+		hashAlgorithm = sha1.New() // #nosec G401 -- RSAES_OAEP_SHA_1 mandated by AWS KMS API.
 	case EncryptionAlgorithmRsaOaepSha256:
 		hashAlgorithm = sha256.New()
 	default:
@@ -27,7 +27,7 @@ func (k *RsaKey) Decrypt(ciphertext []byte, algorithm EncryptionAlgorithm) (plai
 	var hashAlgorithm hash.Hash
 	switch algorithm {
 	case EncryptionAlgorithmRsaOaepSha1:
-		hashAlgorithm = sha1.New()
+		hashAlgorithm = sha1.New() // #nosec G401 -- RSAES_OAEP_SHA_1 mandated by AWS KMS API.
 	case EncryptionAlgorithmRsaOaepSha256:
 		hashAlgorithm = sha256.New()
 	default:
