@@ -134,8 +134,15 @@ func (r *RequestHandler) GetParametersForImport() Response {
 		WrappingAlgorithm: wrappingAlgorithm,
 	}
 
-	// Note - this is guaranteed to be an AesKey by virtue of the `EXTERNAL` origin
-	key.(*cmk.AesKey).SetParametersForImport(params)
+	importableKey, ok := key.(cmk.ImportableKey)
+	if !ok {
+		msg := fmt.Sprintf("%s is not eligible for key material import.", key.GetArn())
+
+		r.logger.WarnContext(r.request.Context(), "unsupported operation", "keyArn", key.GetArn())
+		return NewUnsupportedOperationException(msg)
+	}
+
+	importableKey.SetParametersForImport(params)
 
 	//--------------------------------
 	// Save the key

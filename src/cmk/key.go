@@ -143,6 +143,13 @@ type MacKey interface {
 	VerifyMac(message []byte, mac []byte, algorithm SigningAlgorithm) (bool, error)
 }
 
+type ImportableKey interface {
+	Key
+	GetParametersForImport() *ParametersForImport
+	SetParametersForImport(p *ParametersForImport)
+	ImportKeyMaterial(m []byte) error
+}
+
 //------------------------------------------
 
 type BaseKey struct {

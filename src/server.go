@@ -68,8 +68,11 @@ func Run(ctx context.Context, port, seedPath string) {
 
 	addr := ":" + port
 
-	// Bind the listener explicitly so port-binding failures surface before we
-	// log "started", and so PORT=0 (useful in CI) resolves to the real port.
+	// Bind the listener explicitly, immediately before serving, so port-binding
+	// failures surface before we log "started", and so PORT=0 (useful in CI)
+	// resolves to the real port. Binding any earlier would leave the socket
+	// accepting connections into the kernel backlog while DB setup/seeding are
+	// still running, causing clients to hang instead of getting a fast refusal.
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to bind", "addr", addr, "error", err)
@@ -95,7 +98,10 @@ func Run(ctx context.Context, port, seedPath string) {
 }
 
 func HandleRequest(w http.ResponseWriter, r *http.Request, database *data.Database) {
-	requestId, _ := uuid.NewRandom()
+	requestId, err := uuid.NewRandom()
+	if err != nil {
+		logger.WarnContext(r.Context(), "Failed to generate request id", "error", err)
+	}
 	target := strings.Split(r.Header.Get("X-Amz-Target"), ".")
 	operation := ""
 	if len(target) >= 2 {

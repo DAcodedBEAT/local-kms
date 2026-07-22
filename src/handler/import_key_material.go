@@ -131,7 +131,15 @@ func (r *RequestHandler) ImportKeyMaterial() Response {
 		return NewKMSInvalidStateExceptionResponse(msg)
 	}
 
-	params := key.(*cmk.AesKey).GetParametersForImport()
+	importableKey, ok := key.(cmk.ImportableKey)
+	if !ok {
+		msg := fmt.Sprintf("%s is not eligible for key material import.", key.GetArn())
+
+		r.logger.WarnContext(r.request.Context(), "unsupported operation", "keyArn", key.GetArn())
+		return NewUnsupportedOperationException(msg)
+	}
+
+	params := importableKey.GetParametersForImport()
 	if params == nil || !bytes.Equal(params.ImportToken, body.ImportToken) {
 
 		r.logger.WarnContext(r.request.Context(), "Invalid import token", "keyArn", key.GetArn())
@@ -161,7 +169,7 @@ func (r *RequestHandler) ImportKeyMaterial() Response {
 		return NewInvalidCiphertextExceptionResponse("")
 	}
 
-	if err = key.(*cmk.AesKey).ImportKeyMaterial(keyMaterial); err != nil {
+	if err = importableKey.ImportKeyMaterial(keyMaterial); err != nil {
 		r.logger.WarnContext(r.request.Context(), "unable to import key material", "error", err)
 		return NewIncorrectKeyMaterialExceptionResponse()
 	}

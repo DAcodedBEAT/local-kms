@@ -50,13 +50,9 @@ func (r *RequestHandler) PutKeyPolicy() Response {
 	keyArn := config.EnsureArn("key/", *body.KeyId)
 
 	// Lookup the key
-	key, _ := r.database.LoadKey(keyArn)
-
-	if key == nil {
-		msg := fmt.Sprintf("Key '%s' does not exist", keyArn)
-
-		r.logger.WarnContext(r.request.Context(), "key not found", "keyArn", keyArn)
-		return NewNotFoundExceptionResponse(msg)
+	key, response := r.getKey(keyArn)
+	if !response.Empty() {
+		return response
 	}
 
 	//---

@@ -144,16 +144,11 @@ func (k *AesKey) UnmarshalYAML(unmarshal func(any) error) error {
 	//-------------------------
 	// Decode backing keys
 
-	if k.Metadata.Origin == KeyOriginExternal {
-		switch {
-		case len(yk.BackingKeys) == 0:
-			return nil
-		case len(yk.BackingKeys) > 1:
-			return &UnmarshalYAMLError{message: "EXTERNAL keys can only have a single backing key"}
-		}
+	if k.Metadata.Origin == KeyOriginExternal && len(yk.BackingKeys) > 1 {
+		return &UnmarshalYAMLError{message: "EXTERNAL keys can only have a single backing key"}
 	}
 
-	if len(yk.BackingKeys) < 1 {
+	if k.Metadata.Origin != KeyOriginExternal && len(yk.BackingKeys) < 1 {
 		return &UnmarshalYAMLError{message: "At least one backing key must be supplied"}
 	}
 

@@ -21,7 +21,12 @@ func (r *RequestHandler) CreateKey() Response {
 
 	//---
 
-	keyId := uuid.NewString()
+	keyUUID, err := uuid.NewRandom()
+	if err != nil {
+		r.logger.ErrorContext(r.request.Context(), "internal error", "error", err)
+		return NewInternalFailureExceptionResponse(err.Error())
+	}
+	keyId := keyUUID.String()
 
 	metadata := cmk.KeyMetadata{}
 	metadata.Initialize(keyId)

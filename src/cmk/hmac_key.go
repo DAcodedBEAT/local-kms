@@ -25,18 +25,9 @@ func NewHmacKey(keySpec KeySpec, metadata KeyMetadata, policy string, origin Key
 		BackingKeys: [][]byte{},
 	}
 
-	var keySize int
-	switch keySpec {
-	case SpecHmac224:
-		keySize = 28
-	case SpecHmac256:
-		keySize = 32
-	case SpecHmac384:
-		keySize = 48
-	case SpecHmac512:
-		keySize = 64
-	default:
-		return nil, fmt.Errorf("unsupported HMAC key spec: %s", keySpec)
+	keySize, err := getHmacKeySize(keySpec)
+	if err != nil {
+		return nil, err
 	}
 
 	if origin != KeyOriginExternal {
@@ -53,7 +44,10 @@ func NewHmacKey(keySpec KeySpec, metadata KeyMetadata, policy string, origin Key
 	k.Metadata.KeyUsage = UsageGenerateVerifyMac
 	k.Metadata.KeySpec = keySpec
 	k.Metadata.CustomerMasterKeySpec = keySpec
-	k.Metadata.SigningAlgorithms = getHmacSigningAlgorithms(keySpec)
+	k.Metadata.SigningAlgorithms, err = getHmacSigningAlgorithms(keySpec)
+	if err != nil {
+		return nil, err
+	}
 
 	return k, nil
 }
@@ -87,7 +81,10 @@ func (k *HmacKey) SetParametersForImport(p *ParametersForImport) {
 }
 
 func (k *HmacKey) ImportKeyMaterial(m []byte) error {
-	expectedSize := getHmacKeySize(k.Metadata.KeySpec)
+	expectedSize, err := getHmacKeySize(k.Metadata.KeySpec)
+	if err != nil {
+		return err
+	}
 	if len(m) != expectedSize {
 		return fmt.Errorf("invalid key length: key must be %d bytes in length", expectedSize)
 	}
@@ -113,7 +110,10 @@ func (k *HmacKey) ImportKeyMaterial(m []byte) error {
 
 func (k *HmacKey) RotateIfNeeded() bool {
 	if !k.NextKeyRotation.IsZero() && k.NextKeyRotation.Before(time.Now()) {
-		keySize := getHmacKeySize(k.Metadata.KeySpec)
+		keySize, err := getHmacKeySize(k.Metadata.KeySpec)
+		if err != nil {
+			return false
+		}
 		// #nosec G115 -- keySize is one of 28/32/48/64, fits uint16.
 		k.BackingKeys = append(k.BackingKeys, service.GenerateRandomData(uint16(keySize)))
 
@@ -173,18 +173,18 @@ func (k *HmacKey) VerifyMac(message []byte, mac []byte, algorithm SigningAlgorit
 //----------------------------------------------------
 // Helper functions
 
-func getHmacKeySize(keySpec KeySpec) int {
+func getHmacKeySize(keySpec KeySpec) (int, error) {
 	switch keySpec {
 	case SpecHmac224:
-		return 28
+		return 28, nil
 	case SpecHmac256:
-		return 32
+		return 32, nil
 	case SpecHmac384:
-		return 48
+		return 48, nil
 	case SpecHmac512:
-		return 64
+		return 64, nil
 	default:
-		return 32 // Default to 256-bit
+		return 0, fmt.Errorf("unsupported HMAC key spec: %s", keySpec)
 	}
 }
 
@@ -203,18 +203,18 @@ func getHashFunction(algorithm SigningAlgorithm) (func() hash.Hash, error) {
 	}
 }
 
-func getHmacSigningAlgorithms(keySpec KeySpec) []SigningAlgorithm {
+func getHmacSigningAlgorithms(keySpec KeySpec) ([]SigningAlgorithm, error) {
 	switch keySpec {
 	case SpecHmac224:
-		return []SigningAlgorithm{SigningAlgorithmHmacSha224}
+		return []SigningAlgorithm{SigningAlgorithmHmacSha224}, nil
 	case SpecHmac256:
-		return []SigningAlgorithm{SigningAlgorithmHmacSha256}
+		return []SigningAlgorithm{SigningAlgorithmHmacSha256}, nil
 	case SpecHmac384:
-		return []SigningAlgorithm{SigningAlgorithmHmacSha384}
+		return []SigningAlgorithm{SigningAlgorithmHmacSha384}, nil
 	case SpecHmac512:
-		return []SigningAlgorithm{SigningAlgorithmHmacSha512}
+		return []SigningAlgorithm{SigningAlgorithmHmacSha512}, nil
 	default:
-		return []SigningAlgorithm{SigningAlgorithmHmacSha256}
+		return nil, fmt.Errorf("unsupported HMAC key spec: %s", keySpec)
 	}
 }
 
@@ -241,21 +241,19 @@ func (k *HmacKey) UnmarshalYAML(unmarshal func(any) error) error {
 	//-------------------------
 	// Decode backing keys
 
-	if k.Metadata.Origin == KeyOriginExternal {
-		switch {
-		case len(yk.BackingKeys) == 0:
-			return nil
-		case len(yk.BackingKeys) > 1:
-			return &UnmarshalYAMLError{message: "EXTERNAL keys can only have a single backing key"}
-		}
+	if k.Metadata.Origin == KeyOriginExternal && len(yk.BackingKeys) > 1 {
+		return &UnmarshalYAMLError{message: "EXTERNAL keys can only have a single backing key"}
 	}
 
-	if len(yk.BackingKeys) < 1 {
+	if k.Metadata.Origin != KeyOriginExternal && len(yk.BackingKeys) < 1 {
 		return &UnmarshalYAMLError{message: "At least one backing key must be supplied"}
 	}
 
 	keySpec := yk.Metadata.KeySpec
-	expectedKeySize := getHmacKeySize(keySpec)
+	expectedKeySize, err := getHmacKeySize(keySpec)
+	if err != nil {
+		return &UnmarshalYAMLError{message: err.Error(), cause: err}
+	}
 	k.BackingKeys = make([][]byte, len(yk.BackingKeys))
 
 	for i, keyStr := range yk.BackingKeys {
@@ -283,7 +281,10 @@ func (k *HmacKey) UnmarshalYAML(unmarshal func(any) error) error {
 	}
 
 	k.Metadata.CustomerMasterKeySpec = keySpec
-	k.Metadata.SigningAlgorithms = getHmacSigningAlgorithms(keySpec)
+	k.Metadata.SigningAlgorithms, err = getHmacSigningAlgorithms(keySpec)
+	if err != nil {
+		return &UnmarshalYAMLError{message: err.Error(), cause: err}
+	}
 
 	return nil
 }
