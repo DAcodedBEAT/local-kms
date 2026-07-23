@@ -18,8 +18,9 @@ import (
 // ftp://ftp.rsasecurity.com/pub/pkcs/pkcs-8/pkcs-8v1_2.asn
 // and RFC 5208.
 type pkcs8 struct {
-	Version    int
-	Algo       pkix.AlgorithmIdentifier
+	Version int
+	Algo    pkix.AlgorithmIdentifier
+	// #nosec G117 -- ASN.1 field name mirrors RFC 5208's PKCS#8 structure, not a leaked secret.
 	PrivateKey []byte
 	// optional attributes omitted.
 }
