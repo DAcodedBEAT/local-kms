@@ -169,6 +169,7 @@ func HandleRequest(w http.ResponseWriter, r *http.Request, database *data.Databa
 func respond(ctx context.Context, w http.ResponseWriter, r handler.Response) {
 	logger.DebugContext(ctx, "response", "status", r.Code)
 	w.WriteHeader(r.Code)
+	// #nosec G705 -- local mock; response is JSON/plain text, not HTML.
 	_, _ = fmt.Fprint(w, r.Body)
 }
 

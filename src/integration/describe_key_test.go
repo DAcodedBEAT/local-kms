@@ -65,6 +65,7 @@ func makeKMSRequest(t *testing.T, server *httptest.Server, operation string, pay
 	req.Header.Set("X-Amz-Target", fmt.Sprintf("TrentService.%s", operation))
 
 	client := &http.Client{}
+	// #nosec G704 -- req targets the local httptest server URL, not user-controlled input.
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("Failed to make request: %v", err)

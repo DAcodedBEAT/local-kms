@@ -19,7 +19,8 @@ import (
 // Per RFC 5915 the NamedCurveOID is marked as ASN.1 OPTIONAL, however in
 // most cases it is not.
 type ecPrivateKey struct {
-	Version       int
+	Version int
+	// #nosec G117 -- ASN.1 field name mirrors RFC 5915's SEC1 structure, not a leaked secret.
 	PrivateKey    []byte
 	NamedCurveOID asn1.ObjectIdentifier `asn1:"optional,explicit,tag:0"`
 	PublicKey     asn1.BitString        `asn1:"optional,explicit,tag:1"`
