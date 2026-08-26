@@ -11,9 +11,10 @@ import (
 
 type AesKey struct {
 	BaseKey
-	BackingKeys         [][32]byte
-	NextKeyRotation     time.Time
-	ParametersForImport ParametersForImport
+	BackingKeys           [][32]byte
+	NextKeyRotation       time.Time
+	ParametersForImport   ParametersForImport
+	OnDemandRotationCount int
 }
 
 func NewAesKey(metadata KeyMetadata, policy string, origin KeyOrigin) *AesKey {
@@ -103,6 +104,26 @@ func (k *AesKey) RotateIfNeeded() bool {
 
 	// The key did not rotate
 	return false
+}
+
+//-----------------------
+
+const MaxOnDemandKeyRotations = 25
+
+/*
+Immediately rotates the key's backing material, independent of the automatic
+rotation schedule. Limited to MaxOnDemandKeyRotations calls per key, matching
+AWS KMS's RotateKeyOnDemand limit.
+*/
+func (k *AesKey) RotateOnDemand() error {
+	if k.OnDemandRotationCount >= MaxOnDemandKeyRotations {
+		return errors.New("the on-demand rotations limit has been reached for this KMS key")
+	}
+
+	k.BackingKeys = append(k.BackingKeys, generateKey())
+	k.OnDemandRotationCount++
+
+	return nil
 }
 
 //-----------------------

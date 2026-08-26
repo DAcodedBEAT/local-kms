@@ -137,6 +137,10 @@ func NewUnsupportedOperationException(message string) Response {
 	return New400ExceptionResponseFormatted("UnsupportedOperationException", message, true)
 }
 
+func NewLimitExceededExceptionResponse(message string) Response {
+	return New400ExceptionResponse("LimitExceededException", message)
+}
+
 func NewInvalidImportTokenExceptionResponse() Response {
 	return New400ExceptionResponse("InvalidImportTokenException", "")
 }
