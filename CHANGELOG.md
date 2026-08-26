@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.13.0](https://github.com/DAcodedBEAT/local-kms/compare/v3.12.0...v3.13.0) (2026-08-26)
+
+
+### Features
+
+* add grants API support ([6b2ab15](https://github.com/DAcodedBEAT/local-kms/commit/6b2ab15a3eb38feafc8bc05407673fa4b4a777a1))
+* add RotateKeyOnDemand support ([43b9935](https://github.com/DAcodedBEAT/local-kms/commit/43b99352603c9617c2b944c5b2e263d8f5eef1d4))
+
 ## [3.12.0](https://github.com/DAcodedBEAT/local-kms/compare/v3.11.7...v3.12.0) (2026-07-23)
 
 
