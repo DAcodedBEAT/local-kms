@@ -46,6 +46,21 @@ func ValidateAliasData(a *Alias) error {
 	return nil
 }
 
+// ValidateGrantData verifies that a grant object can be properly serialized and deserialized
+func ValidateGrantData(g *Grant) error {
+	encoded, err := json.Marshal(g)
+	if err != nil {
+		return fmt.Errorf("failed to marshal grant for validation: %w", err)
+	}
+
+	var validationGrant Grant
+	if err := json.Unmarshal(encoded, &validationGrant); err != nil {
+		return fmt.Errorf("failed to unmarshal grant for validation: %w", err)
+	}
+
+	return nil
+}
+
 // ValidateTagData verifies that a tag object can be properly serialized and deserialized
 func ValidateTagData(t *Tag) error {
 	// Serialize the tag
