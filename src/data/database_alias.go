@@ -44,7 +44,7 @@ func (d *Database) ListAlias(prefix string, limit int64, marker, key string) (al
 
 	iter := d.database.NewIterator(util.BytesPrefix([]byte(prefix)), nil)
 
-	var count int64 = 0
+	var count int64
 
 	pastMarker := false
 

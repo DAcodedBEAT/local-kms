@@ -17,6 +17,13 @@ var (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+// run contains main's logic and returns the process exit code. Keeping
+// os.Exit out of here means the db.Close() defer always runs before the
+// process exits, on every path — os.Exit called mid-function would skip it.
+func run() int {
 	ctx := context.Background()
 
 	Version = config.ResolveVersion(Version)
@@ -30,7 +37,7 @@ func main() {
 
 	if _, err := os.Stat(*dbPath); os.IsNotExist(err) {
 		slog.ErrorContext(ctx, "Database path does not exist", "path", *dbPath)
-		os.Exit(1)
+		return 1
 	}
 
 	slog.InfoContext(ctx, "Opening database", "path", *dbPath)
@@ -51,7 +58,7 @@ func main() {
 
 	if len(report.Entries) == 0 {
 		slog.InfoContext(ctx, "No corruption detected")
-		return
+		return 0
 	}
 
 	slog.WarnContext(ctx, "Found corruption",
@@ -66,7 +73,7 @@ func main() {
 
 	if !*removeCorrupted {
 		slog.WarnContext(ctx, "Corruption found. To remove corrupted entries, run with -remove-corrupted flag.", "db", *dbPath)
-		os.Exit(1)
+		return 1
 	}
 
 	fmt.Print("\n\n=== Removing Corrupted Entries ===\n\n")
@@ -76,7 +83,7 @@ func main() {
 	var confirmation string
 	if _, err := fmt.Scanln(&confirmation); err != nil || confirmation != "yes" {
 		slog.InfoContext(ctx, "Operation cancelled by user")
-		os.Exit(0)
+		return 0
 	}
 
 	slog.InfoContext(ctx, "User confirmed corruption removal")
@@ -92,4 +99,5 @@ func main() {
 
 	slog.InfoContext(ctx, "Cleanup complete", "removed_count", removedCount)
 	slog.InfoContext(ctx, "Run health check again to verify results", "db", *dbPath)
+	return 0
 }

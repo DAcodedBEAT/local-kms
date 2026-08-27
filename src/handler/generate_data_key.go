@@ -94,8 +94,7 @@ func (r *RequestHandler) generateDataKey() (Response, *GenerateDataKeyResponse) 
 		}
 
 	} else {
-		// #nosec G115 -- NumberOfBytes validated above to be in [1, 1024], fits uint16.
-		bytesRequired = uint16(*body.NumberOfBytes)
+		bytesRequired = service.ToUint16(int(*body.NumberOfBytes))
 	}
 
 	//----------------------------------

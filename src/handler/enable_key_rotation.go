@@ -85,9 +85,6 @@ func (r *RequestHandler) EnableKeyRotation() Response {
 		key.(*cmk.AesKey).NextKeyRotation = time.Now().AddDate(1, 0, 0)
 	}
 
-	// To allow testing...
-	//key.NextKeyRotation = time.Now().Add( time.Second * 10 )
-
 	//--------------------------------
 	// Save the key
 

@@ -6,7 +6,6 @@ package x509
 
 import (
 	"crypto/ecdsa"
-	"crypto/elliptic"
 	"encoding/asn1"
 )
 
@@ -29,11 +28,24 @@ type ecPrivateKey struct {
 // marshalECPrivateKey marshals an EC private key into ASN.1, DER format and
 // sets the curve ID to the given OID, or omits it if OID is nil.
 func marshalECPrivateKeyWithOID(key *ecdsa.PrivateKey, oid asn1.ObjectIdentifier) ([]byte, error) {
-	privateKey := make([]byte, (key.Params().N.BitLen()+7)/8)
+	byteLen := (key.Params().N.BitLen() + 7) / 8
 	return asn1.Marshal(ecPrivateKey{
 		Version:       1,
-		PrivateKey:    key.D.FillBytes(privateKey),
+		PrivateKey:    ecdsaScalarBytes(key, byteLen),
 		NamedCurveOID: oid,
-		PublicKey:     asn1.BitString{Bytes: elliptic.Marshal(key.Curve, key.X, key.Y)},
+		PublicKey:     asn1.BitString{Bytes: marshalUncompressedPoint(key.Curve, key.X, key.Y)},
 	})
+}
+
+// ecdsaScalarBytes returns the private scalar D as a fixed-length big-endian
+// byte slice. ecdsa.PrivateKey.ECDH()+Bytes() is the non-deprecated path, but
+// it only supports the standard NIST curves and X25519 — not secp256k1
+// (btcec.S256()), which this package also needs to support. Fall back to
+// reading D directly for curves ECDH() rejects.
+func ecdsaScalarBytes(key *ecdsa.PrivateKey, byteLen int) []byte {
+	if ecdhKey, err := key.ECDH(); err == nil {
+		return ecdhKey.Bytes()
+	}
+	//nolint:staticcheck // SA1019: secp256k1 unsupported by crypto/ecdh; D must be read directly.
+	return key.D.FillBytes(make([]byte, byteLen))
 }

@@ -34,13 +34,11 @@ func (r *RequestHandler) UntagResource() Response {
 		return response
 	}
 
-	switch key.GetMetadata().KeyState {
-	case cmk.KeyStatePendingDeletion:
+	if key.GetMetadata().KeyState == cmk.KeyStatePendingDeletion {
 		msg := fmt.Sprintf("%s is pending deletion.", *body.KeyId)
 
 		r.logger.WarnContext(r.request.Context(), "key pending deletion", "keyId", *body.KeyId)
 		return NewKMSInvalidStateExceptionResponse(msg)
-
 	}
 
 	//---

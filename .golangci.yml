@@ -13,26 +13,41 @@ linters:
     - misspell
     - staticcheck
     - gosec
-
-  exclusions:
-    rules:
-      # crypto/x509 + ecc_key.go use Go 1.21-1.26 deprecated APIs (elliptic.Marshal,
-      # rsa.PrivateKey.Precomputed.CRTValues, ecdsa.PrivateKey.D). Migration to
-      # crypto/ecdh is tracked in docs/next-steps/clean-up-lint-findings.md.
-      - path: src/x509/.*\.go
-        linters:
-          - staticcheck
-        text: "SA1019"
-      - path: src/cmk/ecc_key\.go
-        linters:
-          - staticcheck
-        text: "SA1019"
+    - gocritic
+    - revive
 
   settings:
     gosec:
       excludes:
         # G104: errcheck already covers unhandled errors.
         - G104
+    revive:
+      enable-default-rules: true
+      rules:
+        # var-naming (Xxx"Id" -> Xxx"ID") would rename exported struct fields
+        # that mirror the AWS KMS wire format (e.g. "KeyId", "GrantId"); doing
+        # so breaks JSON compatibility with real AWS SDKs. Also flags this
+        # package's intentional `package x509` name (mirrors the stdlib pkg
+        # it forked from) as a stdlib-name clash.
+        - name: var-naming
+          disabled: true
+        # exported / package-comments: doc-comment requirements are aimed at
+        # public library packages; these are internal packages of a single
+        # binary with no external consumers, so the rule adds no value here.
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+
+  exclusions:
+    rules:
+      # gosec's taint-analysis rules (SSRF/XSS/etc.) fire on test helper code
+      # that builds requests/responses against the in-process httptest server
+      # — there's no untrusted input in a test binary. Real production code
+      # keeps full gosec coverage.
+      - path: _test\.go
+        linters:
+          - gosec
 
 issues:
   max-issues-per-linter: 0

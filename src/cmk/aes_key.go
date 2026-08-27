@@ -189,7 +189,7 @@ func (k *AesKey) UnmarshalYAML(unmarshal func(any) error) error {
 			}
 		}
 
-		copy(k.BackingKeys[i][:], keyBytes[:])
+		copy(k.BackingKeys[i][:], keyBytes)
 	}
 	k.Metadata.KeyUsage = UsageEncryptDecrypt
 

@@ -121,12 +121,9 @@ func MarshalPKCS1PrivateKey(key *rsa.PrivateKey) []byte {
 		Qinv:    key.Precomputed.Qinv,
 	}
 
-	priv.AdditionalPrimes = make([]pkcs1AdditionalRSAPrime, len(key.Precomputed.CRTValues))
-	for i, values := range key.Precomputed.CRTValues {
-		priv.AdditionalPrimes[i].Prime = key.Primes[2+i]
-		priv.AdditionalPrimes[i].Exp = values.Exp
-		priv.AdditionalPrimes[i].Coeff = values.Coeff
-	}
+	// Multi-prime RSA (>2 primes) is not generated anywhere in this codebase,
+	// so AdditionalPrimes is always empty; key.Precomputed.CRTValues (the
+	// deprecated field this used to read to populate it) is never touched.
 
 	b, _ := asn1.Marshal(priv)
 	return b

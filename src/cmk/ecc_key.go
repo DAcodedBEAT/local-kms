@@ -159,6 +159,35 @@ func (k *EccKey) HashAndSign(message []byte, algorithm SigningAlgorithm) ([]byte
 
 func (k *EccKey) Verify(signature []byte, digest []byte, algorithm SigningAlgorithm) (bool, error) {
 
+	//--------------------------
+	// Check the requested Signing Algorithm is supported by this key, and
+	// that digest is the correct length for it (mirrors Sign's checks).
+
+	validSigningAlgorithm := slices.Contains(k.Metadata.SigningAlgorithms, algorithm)
+
+	if !validSigningAlgorithm {
+		return false, &InvalidSigningAlgorithm{}
+	}
+
+	switch algorithm {
+	case SigningAlgorithmEcdsaSha256:
+		if len(digest) != (256 / 8) {
+			return false, &InvalidDigestLength{}
+		}
+	case SigningAlgorithmEcdsaSha384:
+		if len(digest) != (384 / 8) {
+			return false, &InvalidDigestLength{}
+		}
+	case SigningAlgorithmEcdsaSha512:
+		if len(digest) != (512 / 8) {
+			return false, &InvalidDigestLength{}
+		}
+	default:
+		return false, errors.New("unknown signing algorithm")
+	}
+
+	//---
+
 	ecdsaSignature := ecdsaSignature{}
 
 	_, err := asn1.Unmarshal(signature, &ecdsaSignature)
@@ -217,6 +246,8 @@ func (k *EcdsaPrivateKey) UnmarshalJSON(data []byte) error {
 	if marshaledKey.CurveType != "" {
 		// Keys generated with Go 1.20 and after
 
+		//nolint:staticcheck // SA1019: no non-deprecated constructor builds an ecdsa.PrivateKey
+		// generically across curves incl. secp256k1 (crypto/ecdh doesn't support it); D must be set directly.
 		pk.D = marshaledKey.D
 		pk.X = marshaledKey.X
 		pk.Y = marshaledKey.Y

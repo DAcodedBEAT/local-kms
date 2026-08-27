@@ -105,7 +105,7 @@ func (d *Database) ListKeys(prefix string, limit int64, marker string) (keys []c
 
 	iter := d.database.NewIterator(util.BytesPrefix([]byte(prefix)), nil)
 
-	var count int64 = 0
+	var count int64
 
 	pastMarker := false
 

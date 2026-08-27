@@ -76,7 +76,6 @@ func (r *RequestHandler) generateDataKeyPair() (Response, *GenerateDataKeyPairRe
 
 	var publicKey any
 	var privateKey any
-	//var err error
 
 	switch keyPairSpec {
 	case cmk.SpecEccNistP256:

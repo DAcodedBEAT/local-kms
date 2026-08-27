@@ -38,7 +38,7 @@ func (d *Database) ListTags(prefix string, limit int64, marker string) (tags []*
 	// The prefix is the Key's ARN, plus /tag
 	iter := d.database.NewIterator(util.BytesPrefix([]byte(prefix+"/tag")), nil)
 
-	var count int64 = 0
+	var count int64
 
 	pastMarker := false
 

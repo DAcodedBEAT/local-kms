@@ -31,8 +31,7 @@ func NewHmacKey(keySpec KeySpec, metadata KeyMetadata, policy string, origin Key
 	}
 
 	if origin != KeyOriginExternal {
-		// #nosec G115 -- keySize is one of 28/32/48/64, fits uint16.
-		k.BackingKeys = append(k.BackingKeys, service.GenerateRandomData(uint16(keySize)))
+		k.BackingKeys = append(k.BackingKeys, service.GenerateRandomData(service.ToUint16(keySize)))
 	}
 
 	k.Type = TypeHmac
@@ -114,8 +113,7 @@ func (k *HmacKey) RotateIfNeeded() bool {
 		if err != nil {
 			return false
 		}
-		// #nosec G115 -- keySize is one of 28/32/48/64, fits uint16.
-		k.BackingKeys = append(k.BackingKeys, service.GenerateRandomData(uint16(keySize)))
+		k.BackingKeys = append(k.BackingKeys, service.GenerateRandomData(service.ToUint16(keySize)))
 
 		// Reset the rotation timer
 		k.NextKeyRotation = time.Now().AddDate(1, 0, 0)

@@ -12,8 +12,7 @@ import (
 
 func (k *AesKey) Decrypt(version uint32, ciphertext []byte, context map[string]string) (plaintext []byte, err error) {
 
-	// #nosec G115 -- len(BackingKeys) is the rotation count, bounded well under math.MaxUint32.
-	if version >= uint32(len(k.BackingKeys)) {
+	if version >= service.ToUint32(len(k.BackingKeys)) {
 		err = errors.New("required version of backing key is invalid")
 		return
 	}
@@ -83,11 +82,9 @@ func (k *AesKey) EncryptAndPackage(plaintext []byte, context map[string]string) 
 	}
 
 	v := make([]byte, 4)
-	// #nosec G115 -- keyVersion = len(BackingKeys)-1, bounded well under math.MaxUint32.
-	binary.LittleEndian.PutUint32(v, uint32(keyVersion))
+	binary.LittleEndian.PutUint32(v, service.ToUint32(keyVersion))
 
-	// #nosec G115 -- bounded by the len(identBytes) > 255 check above.
-	result = []byte{byte(len(identBytes))}
+	result = []byte{service.ToByte(len(identBytes))}
 	result = append(result, identBytes...)
 	result = append(result, v...)
 	result = append(result, ciphertext...)
@@ -107,14 +104,15 @@ func (k *AesKey) encrypt(key [32]byte, plaintext []byte, context map[string]stri
 		return
 	}
 
-	// #nosec G115 -- GCM nonce size is the constant 12 bytes.
-	nonce := service.GenerateRandomData(uint16(aesgcm.NonceSize()))
+	nonce := service.GenerateRandomData(service.ToUint16(aesgcm.NonceSize()))
 
 	additionalDate := prepareAesEncryptionContext(context)
 
 	ciphertext := aesgcm.Seal(nil, nonce, plaintext, additionalDate)
 
-	result = append(nonce, ciphertext...)
+	result = make([]byte, 0, len(nonce)+len(ciphertext))
+	result = append(result, nonce...)
+	result = append(result, ciphertext...)
 
 	return
 }

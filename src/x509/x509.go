@@ -13,6 +13,7 @@ import (
 	"encoding/asn1"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 )
@@ -149,7 +150,7 @@ func marshalPublicKey(pub any) (publicKeyBytes []byte, publicKeyAlgorithm pkix.A
 		// RFC 3279, Section 2.3.1.
 		publicKeyAlgorithm.Parameters = asn1.NullRawValue
 	case *ecdsa.PublicKey:
-		publicKeyBytes = elliptic.Marshal(pub.Curve, pub.X, pub.Y)
+		publicKeyBytes = ecdsaPublicKeyBytes(pub)
 		oid, ok := oidFromNamedCurve(pub.Curve)
 		if !ok {
 			return nil, pkix.AlgorithmIdentifier{}, errors.New("x509: unsupported elliptic curve")
@@ -196,6 +197,30 @@ var (
 	oidNamedCurveP521  = asn1.ObjectIdentifier{1, 3, 132, 0, 35}
 	oidNamedCurve256k1 = asn1.ObjectIdentifier{1, 3, 132, 0, 10}
 )
+
+// ecdsaPublicKeyBytes encodes pub's point in the uncompressed form specified
+// by SEC 1, Version 2.0, Section 2.3.3 (0x04 || X || Y). ecdsa.PublicKey.ECDH()
+// + Bytes() is the non-deprecated path, but it only supports the standard NIST
+// curves — not secp256k1 (btcec.S256()), which this package also needs to
+// support. Fall back to reading X/Y directly for curves ECDH() rejects.
+func ecdsaPublicKeyBytes(pub *ecdsa.PublicKey) []byte {
+	if ecdhKey, err := pub.ECDH(); err == nil {
+		return ecdhKey.Bytes()
+	}
+	return marshalUncompressedPoint(pub.Curve, pub.X, pub.Y) //nolint:staticcheck // SA1019: secp256k1 unsupported by crypto/ecdh; X/Y must be read directly.
+}
+
+// marshalUncompressedPoint encodes a curve point in the uncompressed form
+// specified by SEC 1, Version 2.0, Section 2.3.3 (0x04 || X || Y). Used as a
+// fallback where crypto/ecdh doesn't support the curve (see ecdsaPublicKeyBytes).
+func marshalUncompressedPoint(curve elliptic.Curve, x, y *big.Int) []byte {
+	byteLen := (curve.Params().BitSize + 7) / 8
+	ret := make([]byte, 1+2*byteLen)
+	ret[0] = 4 // uncompressed point
+	x.FillBytes(ret[1 : 1+byteLen])
+	y.FillBytes(ret[1+byteLen : 1+2*byteLen])
+	return ret
+}
 
 func oidFromNamedCurve(curve elliptic.Curve) (asn1.ObjectIdentifier, bool) {
 	switch curve {

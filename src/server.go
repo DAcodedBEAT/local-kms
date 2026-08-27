@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -16,7 +15,10 @@ import (
 	"github.com/nsmithuk/local-kms/src/handler"
 )
 
-func Run(ctx context.Context, port, seedPath string) {
+// Run starts the KMS server and blocks until it exits. It returns the process
+// exit code rather than calling os.Exit itself, so the deferred database
+// close always runs first — os.Exit called mid-function would skip it.
+func Run(ctx context.Context, port, seedPath string) int {
 
 	//-----------
 	// DB Setup
@@ -55,7 +57,7 @@ func Run(ctx context.Context, port, seedPath string) {
 	//-----------
 	// Start
 
-	http.HandleFunc("/_health", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/_health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(200)
 		_, _ = fmt.Fprint(w, "OK")
 	})
@@ -76,7 +78,7 @@ func Run(ctx context.Context, port, seedPath string) {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to bind", "addr", addr, "error", err)
-		os.Exit(1)
+		return 1
 	}
 
 	parts := strings.Split(ln.Addr().String(), ":")
@@ -92,9 +94,10 @@ func Run(ctx context.Context, port, seedPath string) {
 	}
 	if err := srv.Serve(ln); err != nil {
 		logger.ErrorContext(ctx, "Server failed", "error", err)
-		os.Exit(1)
+		return 1
 	}
 
+	return 0
 }
 
 func HandleRequest(w http.ResponseWriter, r *http.Request, database *data.Database) {
@@ -111,58 +114,57 @@ func HandleRequest(w http.ResponseWriter, r *http.Request, database *data.Databa
 
 	logger.DebugContext(ctx, "request", "method", r.Method, "url", r.URL.String())
 
-	if r.URL.Path != "/" {
+	switch {
+	case r.URL.Path != "/":
 		error404(w)
-
-	} else if r.Method != "POST" {
+		return
+	case r.Method != "POST":
 		error405(w)
-
-	} else if !strings.Contains(r.Header.Get("Content-Type"), "json") {
+		return
+	case !strings.Contains(r.Header.Get("Content-Type"), "json"):
 		// Allows both application/x-amz-json-1.1 and application/json
 		error415(w)
+		return
+	}
 
-	} else {
+	w.Header().Set("Content-Type", "application/x-amz-json-1.1")
+	w.Header().Set("x-amzn-requestid", requestId.String())
 
-		w.Header().Set("Content-Type", "application/x-amz-json-1.1")
-		w.Header().Set("x-amzn-requestid", requestId.String())
+	h := handler.NewRequestHandler(r.WithContext(ctx), logger, database)
 
-		h := handler.NewRequestHandler(r.WithContext(ctx), logger, database)
+	if len(target) >= 2 {
 
-		if len(target) >= 2 {
+		method := reflect.ValueOf(h).MethodByName(target[1])
 
-			method := reflect.ValueOf(h).MethodByName(target[1])
+		if method.IsValid() {
 
-			if method.IsValid() {
+			result := method.Call([]reflect.Value{})
 
-				result := method.Call([]reflect.Value{})
-
-				if len(result) == 0 {
-					logger.ErrorContext(ctx, "Missing expected response from reflected method call")
-					http.Error(w, "internal error", http.StatusInternalServerError)
-					return
-				}
-
-				response, ok := result[0].Interface().(handler.Response)
-
-				if !ok {
-					logger.ErrorContext(ctx, "Unable to assert type of returned response")
-					http.Error(w, "internal error", http.StatusInternalServerError)
-					return
-				}
-
-				respond(ctx, w, response)
+			if len(result) == 0 {
+				logger.ErrorContext(ctx, "Missing expected response from reflected method call")
+				http.Error(w, "internal error", http.StatusInternalServerError)
 				return
 			}
 
+			response, ok := result[0].Interface().(handler.Response)
+
+			if !ok {
+				logger.ErrorContext(ctx, "Unable to assert type of returned response")
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
+			}
+
+			respond(ctx, w, response)
+			return
 		}
 
-		// If we couldn't find a valid method matching the request
-		logger.WarnContext(ctx, "unimplemented operation", "target", r.Header.Get("X-Amz-Target"))
-		w.WriteHeader(501)
-		// #nosec G705 -- local mock; response is plain text, not HTML.
-		_, _ = fmt.Fprintf(w, "Passed X-Amz-Target (%s) is not implemented", r.Header.Get("X-Amz-Target"))
-		return
 	}
+
+	// If we couldn't find a valid method matching the request
+	logger.WarnContext(ctx, "unimplemented operation", "target", r.Header.Get("X-Amz-Target"))
+	w.WriteHeader(501)
+	// #nosec G705 -- local mock; response is plain text, not HTML.
+	_, _ = fmt.Fprintf(w, "Passed X-Amz-Target (%s) is not implemented", r.Header.Get("X-Amz-Target"))
 
 }
 

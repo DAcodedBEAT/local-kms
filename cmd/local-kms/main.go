@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"os"
 	"path/filepath"
 
 	"github.com/nsmithuk/local-kms/src"
@@ -40,5 +41,5 @@ func main() {
 
 	port := config.GetEnv(ctx, "PORT", "8080")
 
-	src.Run(ctx, port, seedPath)
+	os.Exit(src.Run(ctx, port, seedPath))
 }

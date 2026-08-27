@@ -108,7 +108,7 @@ func (d *Database) ListGrants(filter GrantFilter, limit int64, marker string) (g
 func (d *Database) scanGrants(limit int64, marker string, include func(*Grant) bool) (grants []*Grant, err error) {
 	iter := d.database.NewIterator(util.BytesPrefix([]byte(grantPrefix)), nil)
 
-	var count int64 = 0
+	var count int64
 	pastMarker := false
 	markerKey := ""
 	if marker != "" {
