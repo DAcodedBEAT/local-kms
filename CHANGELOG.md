@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.13.1](https://github.com/DAcodedBEAT/local-kms/compare/v3.13.0...v3.13.1) (2026-08-27)
+
+
+### Bug Fixes
+
+* EccKey.Verify ignored algorithm, os.Exit skipped deferred db.Close() ([5bc8e45](https://github.com/DAcodedBEAT/local-kms/commit/5bc8e457d35e0c49fee378e72b77b9d131c73522))
+
 ## [3.13.0](https://github.com/DAcodedBEAT/local-kms/compare/v3.12.0...v3.13.0) (2026-08-26)
 
 
