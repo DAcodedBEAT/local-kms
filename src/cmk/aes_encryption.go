@@ -12,7 +12,7 @@ import (
 
 func (k *AesKey) Decrypt(version uint32, ciphertext []byte, context map[string]string) (plaintext []byte, err error) {
 
-	if version >= service.ToUint32(len(k.BackingKeys)) {
+	if version >= service.ToUnsigned[uint32](len(k.BackingKeys)) {
 		err = errors.New("required version of backing key is invalid")
 		return
 	}
@@ -82,9 +82,9 @@ func (k *AesKey) EncryptAndPackage(plaintext []byte, context map[string]string) 
 	}
 
 	v := make([]byte, 4)
-	binary.LittleEndian.PutUint32(v, service.ToUint32(keyVersion))
+	binary.LittleEndian.PutUint32(v, service.ToUnsigned[uint32](keyVersion))
 
-	result = []byte{service.ToByte(len(identBytes))}
+	result = []byte{service.ToUnsigned[byte](len(identBytes))}
 	result = append(result, identBytes...)
 	result = append(result, v...)
 	result = append(result, ciphertext...)
@@ -104,7 +104,7 @@ func (k *AesKey) encrypt(key [32]byte, plaintext []byte, context map[string]stri
 		return
 	}
 
-	nonce := service.GenerateRandomData(service.ToUint16(aesgcm.NonceSize()))
+	nonce := service.GenerateRandomData(service.ToUnsigned[uint16](aesgcm.NonceSize()))
 
 	additionalDate := prepareAesEncryptionContext(context)
 

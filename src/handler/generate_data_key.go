@@ -94,7 +94,7 @@ func (r *RequestHandler) generateDataKey() (Response, *GenerateDataKeyResponse) 
 		}
 
 	} else {
-		bytesRequired = service.ToUint16(int(*body.NumberOfBytes))
+		bytesRequired = service.ToUnsigned[uint16](int(*body.NumberOfBytes))
 	}
 
 	//----------------------------------
